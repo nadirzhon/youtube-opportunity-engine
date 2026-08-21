@@ -1,0 +1,204 @@
+[
+  {
+    "topic": "ai-agents-security",
+    "score": 71.8,
+    "confidence": 1.0,
+    "stage": "accelerating",
+    "breakdown": {
+      "trend_velocity": 14.98,
+      "anomaly_strength": 14.21,
+      "growth_acceleration": 0.0,
+      "competition_inverse": 13.0,
+      "saturation_inverse": 9.0,
+      "repeatability": 6.77,
+      "creator_fit": 3.6,
+      "monetization_potential": 3.6,
+      "production_feasibility": 3.5,
+      "freshness": 3.14
+    },
+    "evidence": [
+      "4 independent channels active, 20 videos.",
+      "Topic view-velocity ~1196/h, stage: accelerating.",
+      "UC0003V2: 14.36\u00d7 the views expected for this channel at 160h old.",
+      "UCTREND2V1: 3.31\u00d7 the views expected for this channel at 6h old.",
+      "UCTREND0V0: 3.08\u00d7 the views expected for this channel at 6h old."
+    ],
+    "reasons_against": [],
+    "sample_video_ids": [
+      "UC0003V2",
+      "UCTREND2V1",
+      "UCTREND0V0"
+    ],
+    "recommended_action": "Pursue now \u2014 strong, open, well-supported."
+  },
+  {
+    "topic": "budget-travel",
+    "score": 66.0,
+    "confidence": 1.0,
+    "stage": "emerging",
+    "breakdown": {
+      "trend_velocity": 14.14,
+      "anomaly_strength": 15.57,
+      "growth_acceleration": 0.0,
+      "competition_inverse": 13.0,
+      "saturation_inverse": 9.0,
+      "repeatability": 1.5,
+      "creator_fit": 3.6,
+      "monetization_potential": 3.6,
+      "production_feasibility": 3.5,
+      "freshness": 2.13
+    },
+    "evidence": [
+      "2 independent channels active, 16 videos.",
+      "Topic view-velocity ~805/h, stage: emerging.",
+      "UC0001V2: 23.38\u00d7 the views expected for this channel at 60h old.",
+      "UC0007V2: 5.56\u00d7 the views expected for this channel at 220h old.",
+      "UC0001V1: Currently gaining ~42 views/hour."
+    ],
+    "reasons_against": [],
+    "sample_video_ids": [
+      "UC0001V2",
+      "UC0007V2",
+      "UC0001V1"
+    ],
+    "recommended_action": "Build a concept and test \u2014 promising but verify."
+  },
+  {
+    "topic": "home-cooking",
+    "score": 57.7,
+    "confidence": 1.0,
+    "stage": "emerging",
+    "breakdown": {
+      "trend_velocity": 18.0,
+      "anomaly_strength": 15.57,
+      "growth_acceleration": 0.0,
+      "competition_inverse": 0.0,
+      "saturation_inverse": 9.0,
+      "repeatability": 2.13,
+      "creator_fit": 3.6,
+      "monetization_potential": 3.6,
+      "production_feasibility": 3.5,
+      "freshness": 2.28
+    },
+    "evidence": [
+      "2 independent channels active, 16 videos.",
+      "Topic view-velocity ~14902/h, stage: emerging.",
+      "UC0006V2: 33.94\u00d7 the views expected for this channel at 60h old.",
+      "UC0000V2: 8.58\u00d7 the views expected for this channel at 160h old.",
+      "UC0000V6: 2.81\u00d7 the views expected for this channel at 60h old."
+    ],
+    "reasons_against": [
+      "Established channels already dominate this topic."
+    ],
+    "sample_video_ids": [
+      "UC0006V2",
+      "UC0000V2",
+      "UC0000V6"
+    ],
+    "recommended_action": "Build a concept and test \u2014 promising but verify."
+  },
+  {
+    "topic": "houseplants",
+    "score": 57.1,
+    "confidence": 0.8,
+    "stage": "latent",
+    "breakdown": {
+      "trend_velocity": 6.84,
+      "anomaly_strength": 12.11,
+      "growth_acceleration": 3.42,
+      "competition_inverse": 13.0,
+      "saturation_inverse": 9.0,
+      "repeatability": 0.0,
+      "creator_fit": 3.6,
+      "monetization_potential": 3.6,
+      "production_feasibility": 3.5,
+      "freshness": 2.08
+    },
+    "evidence": [
+      "1 independent channels active, 8 videos.",
+      "Topic view-velocity ~24/h, stage: latent.",
+      "UC0004V2: 7.32\u00d7 the views expected for this channel at 160h old.",
+      "UC0004V7: 2.68\u00d7 the views expected for this channel at 60h old.",
+      "UC0004V0: Currently gaining ~2 views/hour."
+    ],
+    "reasons_against": [
+      "Only one channel driving it \u2014 may be one-off noise, not a trend."
+    ],
+    "sample_video_ids": [
+      "UC0004V2",
+      "UC0004V7",
+      "UC0004V0"
+    ],
+    "recommended_action": "Build a concept and test \u2014 promising but verify."
+  },
+  {
+    "topic": "car-detailing",
+    "score": 51.8,
+    "confidence": 0.8,
+    "stage": "latent",
+    "breakdown": {
+      "trend_velocity": 15.96,
+      "anomaly_strength": 13.68,
+      "growth_acceleration": 0.0,
+      "competition_inverse": 0.0,
+      "saturation_inverse": 9.0,
+      "repeatability": 0.0,
+      "creator_fit": 3.6,
+      "monetization_potential": 3.6,
+      "production_feasibility": 3.5,
+      "freshness": 2.41
+    },
+    "evidence": [
+      "1 independent channels active, 8 videos.",
+      "Topic view-velocity ~1907/h, stage: latent.",
+      "UC0005V2: 11.41\u00d7 the views expected for this channel at 110h old.",
+      "UC0005V0: 2.93\u00d7 the views expected for this channel at 60h old.",
+      "UC0005V1: Currently gaining ~126 views/hour."
+    ],
+    "reasons_against": [
+      "Established channels already dominate this topic.",
+      "Only one channel driving it \u2014 may be one-off noise, not a trend."
+    ],
+    "sample_video_ids": [
+      "UC0005V2",
+      "UC0005V0",
+      "UC0005V1"
+    ],
+    "recommended_action": "Watch \u2014 add to the monitor list, revisit in 48\u201372h."
+  },
+  {
+    "topic": "retro-gaming",
+    "score": 48.9,
+    "confidence": 0.8,
+    "stage": "latent",
+    "breakdown": {
+      "trend_velocity": 18.0,
+      "anomaly_strength": 8.82,
+      "growth_acceleration": 0.0,
+      "competition_inverse": 0.0,
+      "saturation_inverse": 9.0,
+      "repeatability": 0.0,
+      "creator_fit": 3.6,
+      "monetization_potential": 3.6,
+      "production_feasibility": 3.5,
+      "freshness": 2.42
+    },
+    "evidence": [
+      "1 independent channels active, 8 videos.",
+      "Topic view-velocity ~6179/h, stage: latent.",
+      "UC0002V2: 9.7\u00d7 the channel's median video.",
+      "UC0002V5: Currently gaining ~852 views/hour.",
+      "UC0002V1: Currently gaining ~790 views/hour."
+    ],
+    "reasons_against": [
+      "Established channels already dominate this topic.",
+      "Only one channel driving it \u2014 may be one-off noise, not a trend."
+    ],
+    "sample_video_ids": [
+      "UC0002V2",
+      "UC0002V5",
+      "UC0002V1"
+    ],
+    "recommended_action": "Watch \u2014 add to the monitor list, revisit in 48\u201372h."
+  }
+]
