@@ -74,10 +74,10 @@ Example output (the planted trend surfaces as the #1 opportunity):
 | Core intelligence | anomaly → trend → opportunity, mocks, tests, E2E | ✅ **done** |
 | 1 · API | FastAPI over the core, real YouTube provider (mock fallback), Docker | ✅ **done** |
 | 3 · Persistence | sqlite3 time-series store, collector, history-backed engine | ✅ **done** |
+| 5 · AI content | research → concept → script → quality gate ("Build Opportunity"), pluggable LLM + mock | ✅ **done** |
 | 2 · YouTube Intelligence | real API connector wired to the collector, scheduler, quota manager | ◐ provider done, scheduler next |
 | 3b · Postgres/Alembic | SQLAlchemy adapter + migrations for scale (sqlite is the reference) | ▫ |
 | 4 · Dashboard | Next.js analytics UI, opportunity explorer, charts | ▫ |
-| 5 · AI content | research agent, concept/script/title/thumbnail engines (LLM, pluggable) | ▫ |
 | 6 · Video factory | voice/asset/render pipeline (FFmpeg), quality gate | ▫ |
 | 7 · Feedback loop | authorized-channel analytics, experiments, learning | ▫ |
 | 8 · Hardening | auth/OAuth, RBAC, CI, E2E (Playwright), monitoring, deploy | ▫ |
@@ -103,7 +103,8 @@ yoe/
   api.py               FastAPI app
   config.py            env settings, mock fallback
   demo.py              runnable E2E
-tests/                 pytest (19 tests: core + API + persistence)
+agents/               research · concept · script · quality gate · Build Opportunity
+tests/                 pytest (26 tests: core + API + persistence + agents)
 docs/ARCHITECTURE.md   design + honest status
 sample-data/           example engine output
 ```

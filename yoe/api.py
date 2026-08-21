@@ -106,3 +106,20 @@ def topics() -> dict[str, Any]:
             "topics": [{"topic": t.topic, "stage": t.stage.value,
                         "velocity": t.velocity, "signals": t.signals,
                         "channels": len(t.channel_ids)} for t in r.topics]}
+
+
+@app.post("/build/{topic}")
+def build(topic: str) -> dict[str, Any]:
+    """One-click 'Build Opportunity': research → concepts → script → quality gate.
+
+    Returns the full package with every intermediate artifact for inspection.
+    Uses the mock LLM until an LLM key is configured.
+    """
+    from .agents import build_opportunity
+    r = _report()
+    opp = next((o for o in r.opportunities if o.topic == topic), None)
+    if opp is None:
+        raise HTTPException(404, f"no opportunity for topic '{topic}'")
+    source_titles = [a.video_id for a in r.breakouts]
+    pkg = build_opportunity(opp, source_titles=source_titles)
+    return pkg.to_dict()
