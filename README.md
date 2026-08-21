@@ -36,12 +36,27 @@ collect (provider) → anomaly engine → trend/niche engine → opportunity sco
 ## Run it
 
 ```bash
+# 1) The intelligence core, standalone (zero deps):
 python -m yoe.demo         # end-to-end on mock data → ranked opportunities
 
+# 2) The HTTP API (Phase 1):
 python -m venv .venv && source .venv/bin/activate
-pip install pytest
-pytest -q                 # 9 tests incl. the acceptance scenario
+pip install -r requirements-api.txt
+uvicorn yoe.api:app --reload        # http://localhost:8000/docs
+curl -X POST "http://localhost:8000/scan?mock=true"
+curl "http://localhost:8000/opportunities?limit=5"
+
+# Or in Docker:
+docker compose up            # API on :8000 (mock provider until YOUTUBE_API_KEY is set)
+
+# 3) Tests (core + API):
+pip install pytest httpx
+pytest -q                    # 15 tests incl. acceptance scenario + API
 ```
+
+### API endpoints
+`GET /health` · `POST /scan?mock=true` · `GET /opportunities?limit=&min_score=&stage=`
+· `GET /opportunities/{topic}` · `GET /breakouts` · `GET /topics` · interactive docs at `/docs`.
 
 Example output (the planted trend surfaces as the #1 opportunity):
 
@@ -57,7 +72,7 @@ Example output (the planted trend surfaces as the #1 opportunity):
 | Phase | Scope | Status |
 |---|---|---|
 | Core intelligence | anomaly → trend → opportunity, mocks, tests, E2E | ✅ **done** |
-| 1 · Foundation | repo, Docker, Postgres, Redis, FastAPI, Next.js shell, health checks | ▫ next |
+| 1 · API | FastAPI over the core, real YouTube provider (mock fallback), Docker | ✅ **done** |
 | 2 · YouTube Intelligence | real API connector, collectors, snapshots, scheduler, quota manager | ▫ |
 | 3 · Persistence | SQLAlchemy models, migrations, historical snapshots | ▫ |
 | 4 · Dashboard | Next.js analytics UI, opportunity explorer, charts | ▫ |
