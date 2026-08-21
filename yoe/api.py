@@ -11,17 +11,28 @@ Docs: http://localhost:8000/docs
 
 from __future__ import annotations
 
+import os
 import time
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from . import config
 from .pipeline import EngineReport, run
 from .providers.factory import get_provider
 
-app = FastAPI(title="YouTube Opportunity Engine", version="0.2.0")
+app = FastAPI(title="YouTube Opportunity Engine", version="0.3.0")
+
+_WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
+
+
+@app.get("/", response_class=HTMLResponse)
+def dashboard() -> str:
+    """Serve the single-file analytics dashboard (same-origin → no CORS needed)."""
+    with open(os.path.join(_WEB_DIR, "index.html"), encoding="utf-8") as f:
+        return f.read()
 
 # In-memory cache of the last engine run (swapped for Postgres in a later phase).
 _state: dict[str, Any] = {"report": None, "ran_at": 0.0, "provider": None}
