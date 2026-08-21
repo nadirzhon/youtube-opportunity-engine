@@ -73,8 +73,9 @@ Example output (the planted trend surfaces as the #1 opportunity):
 |---|---|---|
 | Core intelligence | anomaly → trend → opportunity, mocks, tests, E2E | ✅ **done** |
 | 1 · API | FastAPI over the core, real YouTube provider (mock fallback), Docker | ✅ **done** |
-| 2 · YouTube Intelligence | real API connector, collectors, snapshots, scheduler, quota manager | ▫ |
-| 3 · Persistence | SQLAlchemy models, migrations, historical snapshots | ▫ |
+| 3 · Persistence | sqlite3 time-series store, collector, history-backed engine | ✅ **done** |
+| 2 · YouTube Intelligence | real API connector wired to the collector, scheduler, quota manager | ◐ provider done, scheduler next |
+| 3b · Postgres/Alembic | SQLAlchemy adapter + migrations for scale (sqlite is the reference) | ▫ |
 | 4 · Dashboard | Next.js analytics UI, opportunity explorer, charts | ▫ |
 | 5 · AI content | research agent, concept/script/title/thumbnail engines (LLM, pluggable) | ▫ |
 | 6 · Video factory | voice/asset/render pipeline (FFmpeg), quality gate | ▫ |
@@ -97,9 +98,12 @@ yoe/
   anomaly.py           baselines, velocity/acceleration, robust scoring
   trend.py             topic clustering + trend stages
   opportunity.py       weighted scoring, breakdown, confidence, reasons-against
-  pipeline.py          end-to-end orchestrator
+  pipeline.py          end-to-end orchestrator (run · run_from_store)
+  store.py             sqlite3 time-series persistence (collector + reader)
+  api.py               FastAPI app
+  config.py            env settings, mock fallback
   demo.py              runnable E2E
-tests/                 pytest (9 tests incl. acceptance scenario)
+tests/                 pytest (19 tests: core + API + persistence)
 docs/ARCHITECTURE.md   design + honest status
 sample-data/           example engine output
 ```

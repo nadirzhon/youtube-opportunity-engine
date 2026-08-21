@@ -33,13 +33,30 @@ class EngineReport:
 
 
 def run(provider) -> EngineReport:
+    """Run the engine by pulling live from a provider."""
     channels = provider.list_channels()
+    videos_by_channel = {c.channel_id: provider.list_videos(c.channel_id) for c in channels}
+    return _run_on(channels, videos_by_channel)
+
+
+def run_from_store(conn) -> EngineReport:
+    """Run the engine on persisted history (real time-series from the DB)."""
+    from .store import load_channels, load_videos
+    channels = load_channels(conn)
+    videos = load_videos(conn)
+    by_channel: dict[str, list[Video]] = {}
+    for v in videos:
+        by_channel.setdefault(v.channel_id, []).append(v)
+    return _run_on(channels, by_channel)
+
+
+def _run_on(channels: list[Channel], videos_by_channel: dict[str, list[Video]]) -> EngineReport:
     big = {c.channel_id for c in channels if c.subscriber_count >= _BIG_CHANNEL_SUBS}
 
     all_videos: list[Video] = []
     all_anoms: list[AnomalyResult] = []
     for ch in channels:
-        vids = provider.list_videos(ch.channel_id)
+        vids = videos_by_channel.get(ch.channel_id, [])
         all_videos.extend(vids)
         all_anoms.extend(anomaly.score_channel(ch, vids))
 
