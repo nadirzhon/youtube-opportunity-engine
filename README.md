@@ -55,7 +55,7 @@ pytest -q                    # 15 tests incl. acceptance scenario + API
 ```
 
 ### API endpoints
-`GET /health` · `POST /scan?mock=true` · `GET /opportunities?limit=&min_score=&stage=`
+`GET /health` · `GET /status` (worker liveness) · `POST /scan?mock=true` · `GET /opportunities?limit=&min_score=&stage=`
 · `GET /opportunities/{topic}` · `GET /breakouts` · `GET /topics`
 · `POST /build/{topic}` (research→concept→thumbnails→script→quality)
 · `POST /feedback/{topic}` (report measured performance — **closes the learning loop**)
@@ -89,10 +89,30 @@ Example output (the planted trend surfaces as the #1 opportunity):
 | 6 · Video factory | script → scenes → voice/image/subtitle → FFmpeg draft (pluggable + mocks) | ✅ **done** |
 | 7 · Learning loop | Thompson-sampling bandit, insights/feature-importance, niche priors, **closed feedback loop** (publish→measure→remember→bias next `/build`) | ✅ **done** |
 | 8 · Hardening | API-key auth + RBAC, CI workflow, cost budgets | ✅ **done** |
-| — remaining | real YouTube run at scale · Postgres/Alembic · real media providers · deploy | ▫ external |
+| 9 · 24/7 runtime | autonomous worker (collect→analyze→build→learn loop), heartbeat + `/status`, graceful shutdown, error-isolated backoff, Docker/systemd deploy | ✅ **done** |
+| — remaining | real YouTube run at scale · Postgres/Alembic · real media providers | ▫ external (needs keys) |
 
 Each phase is a self-contained turn — the core here is the foundation
 everything else calls into (`yoe/pipeline.py`).
+
+## Run it 24/7
+
+Two long-lived processes share one sqlite time-series store — the **api**
+(dashboard + endpoints) and the **worker** (autonomous loop). Both fall back to
+the mock provider with no keys, so the whole thing runs before you wire real data.
+
+```bash
+cp .env.example .env
+docker compose up -d --build     # api on :8000 + worker, both restart:unless-stopped
+curl localhost:8000/status       # worker heartbeat, cycles, last error, data freshness
+```
+
+The worker each cycle: collects a snapshot pass under quota → re-runs the engine on
+accumulated history → (optionally) builds the top opportunity → learns from results
+→ writes a heartbeat. It **never dies on a bad cycle** (error-isolated, exponential
+backoff), **shuts down gracefully** on SIGTERM, and **degrades safely** (no key →
+mock, over budget → skip). systemd units in `deploy/`; full guide in
+[docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## Non-negotiables (from the spec, honored)
 - Originality only — no re-upload/mirror/copyright-evasion workflows.
@@ -114,7 +134,10 @@ yoe/
   demo.py              runnable E2E
 agents/               research · concept · thumbnail engine · script · quality gate · Build Opportunity
 learning/             bandit · insights · feedback loop (publish→measure→bias next build)
-tests/                 pytest (49 tests: core + API + persistence + agents + learning loop)
+worker.py             24/7 autonomous loop (collect→analyze→build→learn, heartbeat, backoff)
+tests/                 pytest (55 tests: core + API + persistence + agents + learning + worker)
+deploy/               systemd units (yoe-api, yoe-worker)
+docs/DEPLOY.md         Docker Compose + systemd 24/7 deployment guide
 docs/ARCHITECTURE.md   design + honest status
 sample-data/           example engine output
 ```

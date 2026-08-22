@@ -51,6 +51,9 @@ CREATE TABLE IF NOT EXISTS experiments (
   performance REAL, video_url TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_exp_niche ON experiments(niche);
+CREATE TABLE IF NOT EXISTS kv (
+  key TEXT PRIMARY KEY, value TEXT, updated_at TEXT
+);
 """
 
 
@@ -64,8 +67,15 @@ def _url_to_path(url: str | None) -> str:
 
 
 def connect(url: str | None = None) -> sqlite3.Connection:
-    conn = sqlite3.connect(_url_to_path(url), check_same_thread=False)
+    path = _url_to_path(url)
+    conn = sqlite3.connect(path, check_same_thread=False, timeout=30.0)
     conn.row_factory = sqlite3.Row
+    if path != ":memory:":
+        # WAL + a busy timeout let the API (reader) and worker (writer) share one
+        # file safely in a 24/7 deployment without "database is locked" errors.
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=30000")
+        conn.execute("PRAGMA synchronous=NORMAL")
     conn.executescript(_SCHEMA)
     return conn
 
@@ -177,6 +187,26 @@ def load_experiments(conn: sqlite3.Connection, niche: str | None = None) -> list
 
 def experiment_count(conn: sqlite3.Connection) -> int:
     return conn.execute("SELECT COUNT(*) FROM experiments").fetchone()[0]
+
+
+# ---------------------------------------------------------------------------
+# Key/value state — the worker's heartbeat and counters, readable by the API's
+# /status so a 24/7 deployment is observable without extra infrastructure.
+# ---------------------------------------------------------------------------
+def set_state(conn: sqlite3.Connection, key: str, value) -> None:
+    import json
+    now = dt.datetime.now(dt.timezone.utc).isoformat()
+    conn.execute(
+        "INSERT INTO kv(key,value,updated_at) VALUES(?,?,?)"
+        " ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+        (key, json.dumps(value), now))
+    conn.commit()
+
+
+def get_state(conn: sqlite3.Connection, key: str, default=None):
+    import json
+    row = conn.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
+    return json.loads(row["value"]) if row else default
 
 
 def snapshot_count(conn: sqlite3.Connection) -> int:

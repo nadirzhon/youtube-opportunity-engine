@@ -2,10 +2,47 @@ services:
   api:
     build: .
     ports: ["8000:8000"]
+    command: ["uvicorn", "yoe.api:app", "--host", "0.0.0.0", "--port", "8000"]
     environment:
       # Leave YOUTUBE_API_KEY empty to run on the built-in mock provider.
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-}
       - YOUTUBE_CHANNEL_IDS=${YOUTUBE_CHANNEL_IDS:-}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      # API and worker share one sqlite file on the named volume below.
+      - DATABASE_URL=sqlite:////data/yoe.db
+      - DAILY_BUDGET_USD=${DAILY_BUDGET_USD:-10}
+      - MONTHLY_BUDGET_USD=${MONTHLY_BUDGET_USD:-200}
+    volumes:
+      - yoe-data:/data
     restart: unless-stopped
-  # postgres & redis are added in the persistence phase; the API runs standalone
-  # on the in-memory engine for now.
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # The 24/7 autonomous loop: collect → analyze → (optional) build → learn.
+  worker:
+    build: .
+    command: ["python", "-m", "yoe.worker"]
+    environment:
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-}
+      - YOUTUBE_CHANNEL_IDS=${YOUTUBE_CHANNEL_IDS:-}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - DATABASE_URL=sqlite:////data/yoe.db
+      - WORKER_INTERVAL_SEC=${WORKER_INTERVAL_SEC:-1800}
+      - WORKER_AUTO_BUILD=${WORKER_AUTO_BUILD:-false}
+      - WORKER_MIN_OPP_SCORE=${WORKER_MIN_OPP_SCORE:-65}
+      - DAILY_BUDGET_USD=${DAILY_BUDGET_USD:-10}
+      - MONTHLY_BUDGET_USD=${MONTHLY_BUDGET_USD:-200}
+      - YOUTUBE_DAILY_QUOTA=${YOUTUBE_DAILY_QUOTA:-10000}
+    volumes:
+      - yoe-data:/data
+    restart: unless-stopped
+    depends_on:
+      - api
+
+volumes:
+  yoe-data:

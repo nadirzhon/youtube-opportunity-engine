@@ -23,6 +23,13 @@ class Settings:
     youtube_daily_quota: int = int(os.environ.get("YOUTUBE_DAILY_QUOTA", "10000") or 10000)
     mock_seed: int = int(os.environ.get("MOCK_SEED", "1337") or 1337)
 
+    # -- 24/7 worker knobs ------------------------------------------------
+    worker_interval_sec: int = int(os.environ.get("WORKER_INTERVAL_SEC", "1800") or 1800)
+    worker_auto_build: bool = (os.environ.get("WORKER_AUTO_BUILD", "false").lower()
+                               in ("1", "true", "yes"))
+    worker_min_opp_score: float = float(os.environ.get("WORKER_MIN_OPP_SCORE", "65") or 65)
+    worker_max_backoff_sec: int = int(os.environ.get("WORKER_MAX_BACKOFF_SEC", "900") or 900)
+
     @property
     def has_youtube(self) -> bool:
         return bool(self.youtube_api_key)

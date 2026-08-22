@@ -82,6 +82,44 @@ def health() -> dict[str, Any]:
     }
 
 
+@app.get("/status")
+def status() -> dict[str, Any]:
+    """Liveness of the 24/7 worker: heartbeat, cycles, last error, freshness of
+    the stored data. A monitor can poll this to alert on a stalled worker."""
+    import time as _t
+    settings = config.load()
+    beat = store.get_state(_db(), "worker")
+    stale = None
+    if beat and beat.get("last_beat"):
+        try:
+            last = _dt_parse(beat["last_beat"])
+            age = _t.time() - last
+            stale = age > 3 * max(60, beat.get("interval_sec", 1800))
+            beat["heartbeat_age_sec"] = round(age)
+        except Exception:  # noqa: BLE001
+            pass
+    return {
+        "status": "ok",
+        "mode": "youtube" if settings.has_youtube else "mock",
+        "worker": beat or {"healthy": None, "note": "worker has not run yet"},
+        "worker_stale": stale,
+        "counts": {
+            "channels": _count("channels"), "videos": _count("videos"),
+            "snapshots": store.snapshot_count(_db()),
+            "experiments": store.experiment_count(_db()),
+        },
+    }
+
+
+def _dt_parse(iso: str) -> float:
+    import datetime as _d
+    return _d.datetime.fromisoformat(iso).timestamp()
+
+
+def _count(table: str) -> int:
+    return _db().execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+
+
 @app.post("/scan", response_model=ScanResponse)
 def scan(mock: bool = Query(False, description="Force the mock provider")) -> ScanResponse:
     r = _run(force_mock=mock)

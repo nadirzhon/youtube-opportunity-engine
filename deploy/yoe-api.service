@@ -1,0 +1,22 @@
+[Unit]
+Description=YouTube Opportunity Engine — API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust User and paths to your host.
+User=yoe
+WorkingDirectory=/opt/yoe
+EnvironmentFile=/opt/yoe/.env
+Environment=DATABASE_URL=sqlite:////opt/yoe/data/yoe.db
+ExecStart=/opt/yoe/.venv/bin/uvicorn yoe.api:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+# Basic hardening.
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

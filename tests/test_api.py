@@ -80,6 +80,15 @@ def test_build_returns_thumbnails():
     assert "overlay_text" in b["thumbnails"][0]
 
 
+def test_status_reports_worker_and_counts():
+    client.post("/scan?mock=true")
+    r = client.get("/status")
+    assert r.status_code == 200
+    s = r.json()
+    assert s["status"] == "ok" and "worker" in s
+    assert set(s["counts"]) >= {"channels", "videos", "snapshots", "experiments"}
+
+
 def test_feedback_and_insights_loop():
     client.post("/scan?mock=true")
     before = client.get("/insights").json()["n"]

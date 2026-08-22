@@ -1,0 +1,23 @@
+[Unit]
+Description=YouTube Opportunity Engine — 24/7 autonomous worker
+After=network-online.target yoe-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=yoe
+WorkingDirectory=/opt/yoe
+EnvironmentFile=/opt/yoe/.env
+Environment=DATABASE_URL=sqlite:////opt/yoe/data/yoe.db
+ExecStart=/opt/yoe/.venv/bin/python -m yoe.worker
+# The worker handles SIGTERM gracefully (finishes the current cycle, then exits).
+KillSignal=SIGTERM
+TimeoutStopSec=120
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

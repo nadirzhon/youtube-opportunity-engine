@@ -5,3 +5,8 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 .env
+# local sqlite store (+ WAL sidecars)
+*.db
+*.db-wal
+*.db-shm
+data/
