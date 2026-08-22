@@ -56,7 +56,16 @@ pytest -q                    # 15 tests incl. acceptance scenario + API
 
 ### API endpoints
 `GET /health` · `POST /scan?mock=true` · `GET /opportunities?limit=&min_score=&stage=`
-· `GET /opportunities/{topic}` · `GET /breakouts` · `GET /topics` · interactive docs at `/docs`.
+· `GET /opportunities/{topic}` · `GET /breakouts` · `GET /topics`
+· `POST /build/{topic}` (research→concept→thumbnails→script→quality)
+· `POST /feedback/{topic}` (report measured performance — **closes the learning loop**)
+· `GET /insights` (feature-importance + learned per-angle bias) · interactive docs at `/docs`.
+
+**The learning loop, end to end:** `/build` picks the concept, biased by history;
+you publish and observe views/retention; `POST /feedback/{topic}` stores the
+outcome as an experiment; `GET /insights` shows what's working; and the *next*
+`/build` re-ranks concepts toward angles that have actually performed. The system
+compounds — the spec's stated ultimate goal.
 
 Example output (the planted trend surfaces as the #1 opportunity):
 
@@ -74,11 +83,11 @@ Example output (the planted trend surfaces as the #1 opportunity):
 | Core intelligence | anomaly → trend → opportunity, mocks, tests, E2E | ✅ **done** |
 | 1 · API | FastAPI over the core, real YouTube provider (mock fallback), Docker | ✅ **done** |
 | 3 · Persistence | sqlite3 time-series store, collector, history-backed engine | ✅ **done** |
-| 5 · AI content | research → concept → script → quality gate ("Build Opportunity"), pluggable LLM + mock | ✅ **done** |
+| 5 · AI content | research → concept → **thumbnail engine (5 scored directions, honesty gate)** → script → quality gate ("Build Opportunity"), pluggable LLM + mock | ✅ **done** |
 | 2 · Scheduler + quota | adaptive sampling, quota/cost manager, budgets, backoff, cache | ✅ **done** |
 | 4 · Dashboard | self-contained analytics dashboard served by the API | ✅ **done** |
 | 6 · Video factory | script → scenes → voice/image/subtitle → FFmpeg draft (pluggable + mocks) | ✅ **done** |
-| 7 · Learning loop | Thompson-sampling bandit, insights/feature-importance, niche priors | ✅ **done** |
+| 7 · Learning loop | Thompson-sampling bandit, insights/feature-importance, niche priors, **closed feedback loop** (publish→measure→remember→bias next `/build`) | ✅ **done** |
 | 8 · Hardening | API-key auth + RBAC, CI workflow, cost budgets | ✅ **done** |
 | — remaining | real YouTube run at scale · Postgres/Alembic · real media providers · deploy | ▫ external |
 
@@ -103,8 +112,9 @@ yoe/
   api.py               FastAPI app
   config.py            env settings, mock fallback
   demo.py              runnable E2E
-agents/               research · concept · script · quality gate · Build Opportunity
-tests/                 pytest (26 tests: core + API + persistence + agents)
+agents/               research · concept · thumbnail engine · script · quality gate · Build Opportunity
+learning/             bandit · insights · feedback loop (publish→measure→bias next build)
+tests/                 pytest (49 tests: core + API + persistence + agents + learning loop)
 docs/ARCHITECTURE.md   design + honest status
 sample-data/           example engine output
 ```

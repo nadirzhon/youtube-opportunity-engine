@@ -44,6 +44,13 @@ CREATE TABLE IF NOT EXISTS runs (
   provider TEXT, state TEXT, channels INTEGER, videos INTEGER,
   snapshots INTEGER, cost_usd REAL
 );
+CREATE TABLE IF NOT EXISTS experiments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT,
+  topic TEXT, niche TEXT, angle TEXT, hook_style TEXT, title_structure TEXT,
+  title TEXT, duration_sec INTEGER, publish_hour INTEGER,
+  performance REAL, video_url TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_exp_niche ON experiments(niche);
 """
 
 
@@ -139,6 +146,37 @@ def load_videos(conn: sqlite3.Connection) -> list[Video]:
             published_hours_ago=age, duration_sec=r["duration_sec"], category=r["category"],
             topics=tuple(t for t in (r["topics"] or "").split(",") if t), snapshots=series))
     return out
+
+
+# ---------------------------------------------------------------------------
+# Experiments — the learning loop's memory. Each published asset + its measured
+# performance is one row; the learner reads these back to compound over time.
+# ---------------------------------------------------------------------------
+def save_experiment(conn: sqlite3.Connection, exp: dict) -> int:
+    now = dt.datetime.now(dt.timezone.utc).isoformat()
+    cur = conn.execute(
+        "INSERT INTO experiments(created_at,topic,niche,angle,hook_style,title_structure,"
+        "title,duration_sec,publish_hour,performance,video_url)"
+        " VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        (now, exp.get("topic"), exp.get("niche"), exp.get("angle"),
+         exp.get("hook_style"), exp.get("title_structure"), exp.get("title"),
+         exp.get("duration_sec"), exp.get("publish_hour"),
+         exp.get("performance"), exp.get("video_url")))
+    conn.commit()
+    return cur.lastrowid
+
+
+def load_experiments(conn: sqlite3.Connection, niche: str | None = None) -> list[dict]:
+    if niche:
+        rows = conn.execute(
+            "SELECT * FROM experiments WHERE niche=? ORDER BY id", (niche,)).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM experiments ORDER BY id").fetchall()
+    return [dict(r) for r in rows]
+
+
+def experiment_count(conn: sqlite3.Connection) -> int:
+    return conn.execute("SELECT COUNT(*) FROM experiments").fetchone()[0]
 
 
 def snapshot_count(conn: sqlite3.Connection) -> int:

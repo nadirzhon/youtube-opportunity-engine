@@ -68,3 +68,26 @@ def test_breakouts_and_topics():
     assert b.status_code == 200 and b.json()["count"] > 0
     t = client.get("/topics")
     assert t.status_code == 200 and t.json()["count"] > 0
+
+
+def test_build_returns_thumbnails():
+    client.post("/scan?mock=true")
+    r = client.post("/build/ai-agents-security")
+    assert r.status_code == 200
+    b = r.json()
+    assert len(b["thumbnails"]) == 5
+    assert b["thumbnails"][0]["accepted"]           # best pick is honest
+    assert "overlay_text" in b["thumbnails"][0]
+
+
+def test_feedback_and_insights_loop():
+    client.post("/scan?mock=true")
+    before = client.get("/insights").json()["n"]
+    fb = client.post("/feedback/ai-agents-security",
+                     json={"performance": 0.8, "publish_hour": 9})
+    assert fb.status_code == 200 and fb.json()["ok"]
+    after = client.get("/insights").json()
+    assert after["n"] == before + 1                 # experiment was remembered
+    assert "learned_angle_bias" in after
+    # unknown topic → 404
+    assert client.post("/feedback/nope", json={"performance": 0.5}).status_code == 404

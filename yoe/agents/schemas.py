@@ -81,6 +81,7 @@ class OpportunityPackage:
     chosen: Concept
     script: Script
     quality: QualityResult
+    thumbnails: list[Any] = field(default_factory=list)   # ranked Thumbnail options
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -90,4 +91,5 @@ class OpportunityPackage:
             "chosen": self.chosen.to_dict(),
             "script": self.script.to_dict(),
             "quality": self.quality.to_dict(),
+            "thumbnails": [t.to_dict() for t in self.thumbnails],
         }

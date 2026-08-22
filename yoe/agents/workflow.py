@@ -15,11 +15,16 @@ from . import concept as concept_engine
 from . import quality as quality_gate
 from . import research as research_agent
 from . import script as script_engine
+from . import thumbnail as thumbnail_engine
 from .schemas import OpportunityPackage
 
 
 def build_opportunity(opportunity: Opportunity, llm: LLMProvider | None = None,
-                      *, source_titles: list[str] | None = None) -> OpportunityPackage:
+                      *, source_titles: list[str] | None = None,
+                      experience=None) -> OpportunityPackage:
+    """Discover→create for one opportunity. If ``experience`` (a scorer from
+    ``learning.learned_boost``) is passed, concepts are re-ranked by what has
+    historically performed — this is the learning loop biasing the next choice."""
     llm = llm or MockLLMProvider()
 
     thesis = research_agent.research(opportunity, llm)
@@ -27,10 +32,14 @@ def build_opportunity(opportunity: Opportunity, llm: LLMProvider | None = None,
                                        source_titles=source_titles or [])
     if not concepts:
         raise ValueError("no original concepts survived the originality filter")
+    if experience is not None:
+        from ..learning import rerank_with_experience
+        concepts = rerank_with_experience(concepts, experience)
     chosen = concepts[0]
     script = script_engine.write(chosen, llm)
     quality = quality_gate.run_gate(chosen, script, originality=chosen.originality)
+    thumbnails = thumbnail_engine.generate(chosen, source_titles=source_titles or [])
 
     return OpportunityPackage(topic=opportunity.topic, thesis=thesis,
                               concepts=concepts, chosen=chosen, script=script,
-                              quality=quality)
+                              quality=quality, thumbnails=thumbnails)

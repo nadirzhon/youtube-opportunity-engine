@@ -175,6 +175,11 @@ async function build(topic){
      <p style="margin-top:6px">${c.viewer_promise} — <span class="muted">${c.unique_angle}</span></p>
      <p class="muted" style="margin-top:4px">originality ${c.originality} · rank ${c.rank_score}</p></div>`).join('');
   const checks = q.checks.map(c=>`<div class="qc"><span>${c.passed?'✓':'✕'} ${c.name}</span><span class="${c.passed?'':'muted'}">${c.score}</span></div>`).join('');
+  const thumbs = (p.thumbnails||[]).map((t,i)=>`<div class="concept ${i===0?'chosen':''}">
+     <b>${t.direction.replace(/_/g,' ')}</b> ${i===0?'<span class="pill" style="color:var(--cyan)">pick</span>':''}
+     ${t.accepted?'':'<span class="pill" style="color:var(--red)">rejected · misleading</span>'}
+     <p style="margin-top:6px">overlay: <span style="color:var(--txt)">“${t.overlay_text}”</span> · <b style="color:var(--brass)">${t.overall}</b>/100</p>
+     <p class="muted" style="margin-top:4px">${t.rationale}</p></div>`).join('');
   const script = `${p.script.hook}\n\n` + p.script.sections.map(s=>`— ${s.heading} [${s.retention_device}]\n  ${s.beats.join('\n  ')}`).join('\n\n') + `\n\n${p.script.outro}`;
   document.getElementById('pbody').innerHTML = `
     <h2 style="text-transform:capitalize">${p.topic.replace(/-/g,' ')}</h2>
@@ -183,6 +188,7 @@ async function build(topic){
     <p><b style="color:var(--txt)">Audience:</b> ${p.thesis.audience_desire}</p>
     <p><b style="color:var(--txt)">Gap:</b> ${p.thesis.content_gap}</p>
     <h4>Concepts (top ${p.concepts.length})</h4>${concepts}
+    <h4>Thumbnail directions (${(p.thumbnails||[]).length})</h4>${thumbs}
     <h4>Script — ${p.script.word_count} words</h4><pre>${script.replace(/</g,'&lt;')}</pre>
     <h4>Quality gate — ${q.passed?'<span style="color:var(--green)">PASS</span>':'<span style="color:var(--red)">FAIL</span>'} · ${q.score}/100</h4>${checks}`;
 }

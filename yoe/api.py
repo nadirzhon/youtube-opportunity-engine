@@ -19,11 +19,11 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from . import config
+from . import config, store
 from .pipeline import EngineReport, run
 from .providers.factory import get_provider
 
-app = FastAPI(title="YouTube Opportunity Engine", version="0.3.0")
+app = FastAPI(title="YouTube Opportunity Engine", version="0.4.0")
 
 _WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
 
@@ -35,7 +35,14 @@ def dashboard() -> str:
         return f.read()
 
 # In-memory cache of the last engine run (swapped for Postgres in a later phase).
-_state: dict[str, Any] = {"report": None, "ran_at": 0.0, "provider": None}
+_state: dict[str, Any] = {"report": None, "ran_at": 0.0, "provider": None, "db": None}
+
+
+def _db():
+    """Lazy shared store connection for the learning loop's experiment memory."""
+    if _state["db"] is None:
+        _state["db"] = store.connect(os.environ.get("DATABASE_URL"))
+    return _state["db"]
 
 
 class ScanResponse(BaseModel):
@@ -132,5 +139,46 @@ def build(topic: str) -> dict[str, Any]:
     if opp is None:
         raise HTTPException(404, f"no opportunity for topic '{topic}'")
     source_titles = [a.video_id for a in r.breakouts]
-    pkg = build_opportunity(opp, source_titles=source_titles)
+    # bias concept choice by what has historically worked for this niche
+    from .learning import learned_boost
+    experience = learned_boost(store.load_experiments(_db(), niche=topic))
+    pkg = build_opportunity(opp, source_titles=source_titles, experience=experience)
     return pkg.to_dict()
+
+
+class FeedbackBody(BaseModel):
+    performance: float          # 0..1 normalized outcome (e.g. views vs expectation)
+    publish_hour: int | None = None
+    video_url: str | None = None
+
+
+@app.post("/feedback/{topic}")
+def feedback(topic: str, body: FeedbackBody) -> dict[str, Any]:
+    """Report a produced asset's measured performance. This is the loop closing:
+    the outcome is stored as an experiment and biases every future /build."""
+    from .agents import build_opportunity
+    from .learning import record_publication
+    r = _report()
+    opp = next((o for o in r.opportunities if o.topic == topic), None)
+    if opp is None:
+        raise HTTPException(404, f"no opportunity for topic '{topic}'")
+    source_titles = [a.video_id for a in r.breakouts]
+    pkg = build_opportunity(opp, source_titles=source_titles)
+    eid = record_publication(_db(), pkg, performance=body.performance,
+                             publish_hour=body.publish_hour, video_url=body.video_url)
+    n = store.experiment_count(_db())
+    return {"ok": True, "experiment_id": eid, "experiments_recorded": n,
+            "topic": topic, "performance": max(0.0, min(1.0, body.performance))}
+
+
+@app.get("/insights")
+def learning_insights() -> dict[str, Any]:
+    """What the system has learned so far — feature-importance across recorded
+    experiments plus the per-angle learned bias applied to future builds."""
+    from .learning import insights, learned_boost
+    exps = store.load_experiments(_db())
+    ins = insights(exps)
+    scorer = learned_boost(exps)
+    ins["learned_angle_bias"] = {v: round((a / (a + b)) - 0.5, 3)
+                                 for v, (a, b) in scorer.arms.items()}
+    return ins

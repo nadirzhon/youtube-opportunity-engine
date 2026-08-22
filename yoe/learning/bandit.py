@@ -40,6 +40,12 @@ class Bandit:
     def arm(self, name: str) -> Arm:
         return self.arms.setdefault(name, Arm(name))
 
+    def set_prior(self, name: str, alpha: float, beta: float) -> Arm:
+        """Warm-start an arm with a Beta(alpha, beta) prior (e.g. from history)."""
+        a = self.arm(name)
+        a.alpha, a.beta = float(alpha), float(beta)
+        return a
+
     def update(self, name: str, *, success: bool, weight: float = 1.0) -> None:
         a = self.arm(name)
         if success:
