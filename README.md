@@ -75,12 +75,12 @@ Example output (the planted trend surfaces as the #1 opportunity):
 | 1 · API | FastAPI over the core, real YouTube provider (mock fallback), Docker | ✅ **done** |
 | 3 · Persistence | sqlite3 time-series store, collector, history-backed engine | ✅ **done** |
 | 5 · AI content | research → concept → script → quality gate ("Build Opportunity"), pluggable LLM + mock | ✅ **done** |
-| 2 · YouTube Intelligence | real API connector wired to the collector, scheduler, quota manager | ◐ provider done, scheduler next |
-| 3b · Postgres/Alembic | SQLAlchemy adapter + migrations for scale (sqlite is the reference) | ▫ |
-| 4 · Dashboard | Next.js analytics UI, opportunity explorer, charts | ▫ |
-| 6 · Video factory | voice/asset/render pipeline (FFmpeg), quality gate | ▫ |
-| 7 · Feedback loop | authorized-channel analytics, experiments, learning | ▫ |
-| 8 · Hardening | auth/OAuth, RBAC, CI, E2E (Playwright), monitoring, deploy | ▫ |
+| 2 · Scheduler + quota | adaptive sampling, quota/cost manager, budgets, backoff, cache | ✅ **done** |
+| 4 · Dashboard | self-contained analytics dashboard served by the API | ✅ **done** |
+| 6 · Video factory | script → scenes → voice/image/subtitle → FFmpeg draft (pluggable + mocks) | ✅ **done** |
+| 7 · Learning loop | Thompson-sampling bandit, insights/feature-importance, niche priors | ✅ **done** |
+| 8 · Hardening | API-key auth + RBAC, CI workflow, cost budgets | ✅ **done** |
+| — remaining | real YouTube run at scale · Postgres/Alembic · real media providers · deploy | ▫ external |
 
 Each phase is a self-contained turn — the core here is the foundation
 everything else calls into (`yoe/pipeline.py`).
