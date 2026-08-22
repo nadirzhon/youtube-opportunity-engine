@@ -78,6 +78,20 @@ def test_loop_survives_a_failing_cycle_and_backs_off():
     conn.close()
 
 
+def test_quota_resets_on_utc_day_rollover():
+    """A long-lived worker must reset the daily quota at the day boundary, or it
+    skips collection forever once day 1's quota is spent."""
+    import datetime as dt
+    conn = store.connect(":memory:")
+    w = Worker(_settings(), conn=conn)
+    w.quota.quota_used = 9999            # pretend today's quota is nearly spent
+    w._quota_day = dt.date(2000, 1, 1)   # force a stale "current day"
+    w._maybe_roll_quota_day()            # today != 2000-01-01 → must reset
+    assert w.quota.quota_used == 0
+    assert w._quota_day == dt.datetime.now(dt.timezone.utc).date()
+    conn.close()
+
+
 def test_request_stop_ends_the_loop():
     conn = store.connect(":memory:")
     w = Worker(_settings(), conn=conn)

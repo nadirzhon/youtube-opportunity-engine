@@ -58,6 +58,7 @@ class Worker:
         self._stop = False
         self._cycles = 0
         self._errors = 0
+        self._quota_day = dt.datetime.now(dt.timezone.utc).date()
 
     # -- lifecycle --------------------------------------------------------
     def request_stop(self, *_a) -> None:
@@ -73,9 +74,20 @@ class Worker:
                 pass  # not in main thread (e.g. tests) — caller drives the loop
 
     # -- one pass ---------------------------------------------------------
+    def _maybe_roll_quota_day(self) -> None:
+        """Reset the daily YouTube quota + $ spend when the UTC date rolls over —
+        without this a long-lived worker exhausts day 1's quota and then skips
+        collection forever. (Observed live: 40 cycles of `skipped(budget)`.)"""
+        today = dt.datetime.now(dt.timezone.utc).date()
+        if today != self._quota_day:
+            self.quota.reset_day()
+            self._quota_day = today
+            log.info("new UTC day %s — daily quota/budget reset", today)
+
     def run_cycle(self) -> dict:
         """One collect→analyze→(build)→record pass. Returns a summary dict.
         Raises nothing that run_forever can't absorb; still, callers get truth."""
+        self._maybe_roll_quota_day()
         provider = get_provider(self.settings)
         prov = "mock" if getattr(provider, "is_mock", False) else "youtube"
 
