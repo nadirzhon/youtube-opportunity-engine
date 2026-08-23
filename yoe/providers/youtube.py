@@ -58,12 +58,25 @@ class YouTubeDataProvider:
                 topics=topics))
         return out
 
+    def _uploads_playlist(self, channel_id: str) -> str | None:
+        resp = self._service().channels().list(
+            part="contentDetails", id=channel_id, maxResults=1).execute()
+        items = resp.get("items", [])
+        if not items:
+            return None
+        return items[0]["contentDetails"]["relatedPlaylists"].get("uploads")
+
     def list_videos(self, channel_id: str) -> list[Video]:
-        # 1) recent uploads via search, 2) hydrate stats via videos.list
-        search = self._service().search().list(
-            part="id", channelId=channel_id, order="date",
-            type="video", maxResults=25).execute()
-        ids = [i["id"]["videoId"] for i in search.get("items", []) if i.get("id", {}).get("videoId")]
+        # Recent uploads via the channel's uploads playlist (1 quota unit) rather
+        # than search.list (100 units, and unreliable — it returns 0 for many
+        # channels). Then hydrate stats via videos.list.
+        uploads = self._uploads_playlist(channel_id)
+        if not uploads:
+            return []
+        pl = self._service().playlistItems().list(
+            part="contentDetails", playlistId=uploads, maxResults=25).execute()
+        ids = [it["contentDetails"]["videoId"] for it in pl.get("items", [])
+               if it.get("contentDetails", {}).get("videoId")]
         if not ids:
             return []
         vresp = self._service().videos().list(

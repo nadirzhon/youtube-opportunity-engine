@@ -41,17 +41,22 @@ class SchedulerResult:
 def tick(conn, provider, quota: QuotaManager | None = None) -> SchedulerResult:
     """Run one scheduled collection pass under quota control."""
     quota = quota or QuotaManager()
-    # Estimate: channels.list (1) + search.list per channel (100) + videos.list (1)
+    # Estimate per channel: channels.list contentDetails (1) + playlistItems.list
+    # (1) + videos.list (1) = 3 units — the uploads-playlist path, ~30× cheaper
+    # than the old search.list (100 units) approach.
     channels = provider.list_channels()
-    est = quota.estimate_quota("channels.list") + \
-        len(channels) * (quota.estimate_quota("search.list") + quota.estimate_quota("videos.list"))
+    per_channel = (quota.estimate_quota("channels.list")
+                   + quota.estimate_quota("playlistItems.list")
+                   + quota.estimate_quota("videos.list"))
+    est = quota.estimate_quota("channels.list") + len(channels) * per_channel
     if quota.quota_used + est > quota.daily_quota:
         return SchedulerResult(collected={"channels": 0, "videos": 0, "snapshots": 0},
                                quota=quota.status(), skipped_over_budget=True)
 
     quota.charge_quota("channels.list")
     for _ in channels:
-        quota.charge_quota("search.list")
+        quota.charge_quota("channels.list")      # contentDetails lookup
+        quota.charge_quota("playlistItems.list")
         quota.charge_quota("videos.list")
 
     result = collect(conn, provider)
