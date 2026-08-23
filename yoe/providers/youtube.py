@@ -82,18 +82,31 @@ class YouTubeDataProvider:
         vresp = self._service().videos().list(
             part="snippet,statistics,contentDetails,topicDetails",
             id=",".join(ids), maxResults=50).execute()
+        items = vresp.get("items", [])
+
+        # Fine-grained niche labels from title + creator tags, replacing YouTube's
+        # coarse topicCategories. Corpus = this channel's recent uploads, so a
+        # phrase several of its videos share is favoured (breadth signal); the
+        # trend engine then finds phrases shared *across* channels.
+        from ..keyphrase import extract_corpus_topics
+        docs = [(it["snippet"].get("title", ""), it["snippet"].get("tags", []) or [])
+                for it in items]
+        labels = extract_corpus_topics(docs)
+
         out: list[Video] = []
-        for it in vresp.get("items", []):
+        for it, topics in zip(items, labels):
             stats = it.get("statistics", {})
             snip = it["snippet"]
             age = _age_hours(snip.get("publishedAt", ""))
-            topics = tuple(t.split("/")[-1] for t in
-                           it.get("topicDetails", {}).get("topicCategories", []))
+            # keep a broad category as a coarse fallback if extraction found nothing
+            broad = tuple(t.split("/")[-1] for t in
+                          it.get("topicDetails", {}).get("topicCategories", []))
+            topics = tuple(topics) if topics and topics != ["uncategorized"] else (broad or ("uncategorized",))
             out.append(Video(
                 video_id=it["id"], channel_id=channel_id, title=snip.get("title", ""),
                 published_hours_ago=age,
                 duration_sec=_iso8601_seconds(it.get("contentDetails", {}).get("duration", "PT0S")),
-                category=snip.get("categoryId", ""), topics=topics or ("uncategorized",),
+                category=snip.get("categoryId", ""), topics=topics,
                 snapshots=[VideoSnapshot(
                     at_hours=age,
                     view_count=int(stats.get("viewCount", 0) or 0),
