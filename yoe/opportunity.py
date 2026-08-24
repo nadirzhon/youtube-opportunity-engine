@@ -102,12 +102,16 @@ def _action(score: float, stage: TrendStage, conf: float) -> str:
 
 def rank_opportunities(clusters: list[TopicCluster],
                        anomalies_by_topic: dict[str, list[AnomalyResult]],
-                       big_channel_ids: set[str]) -> list[Opportunity]:
+                       big_channel_ids: set[str],
+                       weights: dict[str, float] | None = None) -> list[Opportunity]:
+    """Rank opportunities. `weights` overrides the spec defaults — pass calibrated
+    weights from `learning.calibration` to let real outcomes reshape the score."""
+    w = weights or WEIGHTS
     out: list[Opportunity] = []
     for cluster in clusters:
         anoms = anomalies_by_topic.get(cluster.topic, [])
         dims = _dimensions(cluster, anoms, big_channel_ids)
-        breakdown = {k: round(WEIGHTS[k] * dims[k] * 100, 2) for k in WEIGHTS}
+        breakdown = {k: round(w.get(k, WEIGHTS[k]) * dims[k] * 100, 2) for k in WEIGHTS}
         score = round(sum(breakdown.values()), 1)
         conf = _confidence(cluster, anoms)
 
@@ -126,6 +130,7 @@ def rank_opportunities(clusters: list[TopicCluster],
             breakdown=breakdown, evidence=evidence,
             reasons_against=_reasons_against(cluster, dims, conf),
             sample_video_ids=[a.video_id for a in top],
-            recommended_action=_action(score, cluster.stage, conf)))
+            recommended_action=_action(score, cluster.stage, conf),
+            dimensions={k: round(dims[k], 4) for k in WEIGHTS}))
     out.sort(key=lambda o: o.score, reverse=True)
     return out

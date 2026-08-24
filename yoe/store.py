@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS experiments (
   id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT,
   topic TEXT, niche TEXT, angle TEXT, hook_style TEXT, title_structure TEXT,
   title TEXT, duration_sec INTEGER, publish_hour INTEGER,
-  performance REAL, video_url TEXT
+  performance REAL, video_url TEXT, dimensions TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_exp_niche ON experiments(niche);
 CREATE TABLE IF NOT EXISTS kv (
@@ -163,26 +163,39 @@ def load_videos(conn: sqlite3.Connection) -> list[Video]:
 # performance is one row; the learner reads these back to compound over time.
 # ---------------------------------------------------------------------------
 def save_experiment(conn: sqlite3.Connection, exp: dict) -> int:
+    import json
     now = dt.datetime.now(dt.timezone.utc).isoformat()
+    dims = exp.get("dimensions")
     cur = conn.execute(
         "INSERT INTO experiments(created_at,topic,niche,angle,hook_style,title_structure,"
-        "title,duration_sec,publish_hour,performance,video_url)"
-        " VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        "title,duration_sec,publish_hour,performance,video_url,dimensions)"
+        " VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
         (now, exp.get("topic"), exp.get("niche"), exp.get("angle"),
          exp.get("hook_style"), exp.get("title_structure"), exp.get("title"),
          exp.get("duration_sec"), exp.get("publish_hour"),
-         exp.get("performance"), exp.get("video_url")))
+         exp.get("performance"), exp.get("video_url"),
+         json.dumps(dims) if dims else None))
     conn.commit()
     return cur.lastrowid
 
 
 def load_experiments(conn: sqlite3.Connection, niche: str | None = None) -> list[dict]:
+    import json
     if niche:
         rows = conn.execute(
             "SELECT * FROM experiments WHERE niche=? ORDER BY id", (niche,)).fetchall()
     else:
         rows = conn.execute("SELECT * FROM experiments ORDER BY id").fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        d = dict(r)
+        if d.get("dimensions"):
+            try:
+                d["dimensions"] = json.loads(d["dimensions"])
+            except (ValueError, TypeError):
+                d["dimensions"] = None
+        out.append(d)
+    return out
 
 
 def experiment_count(conn: sqlite3.Connection) -> int:

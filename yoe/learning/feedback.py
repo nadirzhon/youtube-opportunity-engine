@@ -54,8 +54,10 @@ def classify_title(title: str) -> str:
 
 def package_to_experiment(package, performance: float, *,
                           publish_hour: int | None = None,
-                          video_url: str | None = None) -> dict:
-    """Derive the experiment row from a built OpportunityPackage."""
+                          video_url: str | None = None,
+                          dimensions: dict | None = None) -> dict:
+    """Derive the experiment row from a built OpportunityPackage. `dimensions` are
+    the opportunity's raw 0..1 signals — stored so the scorer can self-calibrate."""
     c = package.chosen
     title = c.title_hypotheses[0] if c.title_hypotheses else package.topic
     return {
@@ -69,16 +71,22 @@ def package_to_experiment(package, performance: float, *,
         "publish_hour": publish_hour,
         "performance": max(0.0, min(1.0, float(performance))),
         "video_url": video_url,
+        "dimensions": dimensions or None,
     }
 
 
 def record_publication(conn, package, performance: float, *,
                        publish_hour: int | None = None,
-                       video_url: str | None = None) -> int:
-    """Persist one produced-and-measured asset as an experiment. Returns its id."""
+                       video_url: str | None = None,
+                       opportunity=None, dimensions: dict | None = None) -> int:
+    """Persist one produced-and-measured asset as an experiment. Pass `opportunity`
+    (or `dimensions`) so the scorer can learn which signals predicted success.
+    Returns the experiment id."""
     from .. import store  # local import avoids a cycle at module load
-    exp = package_to_experiment(package, performance,
-                                publish_hour=publish_hour, video_url=video_url)
+    if dimensions is None and opportunity is not None:
+        dimensions = getattr(opportunity, "dimensions", None)
+    exp = package_to_experiment(package, performance, publish_hour=publish_hour,
+                                video_url=video_url, dimensions=dimensions)
     return store.save_experiment(conn, exp)
 
 

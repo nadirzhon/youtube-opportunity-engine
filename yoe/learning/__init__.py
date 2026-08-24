@@ -5,8 +5,10 @@ from .feedback import (
     record_publication, package_to_experiment, learned_boost,
     rerank_with_experience, classify_hook, classify_title,
 )
+from .calibration import calibrate, calibration_report
 __all__ = [
     "Bandit", "insights", "niche_priors",
     "record_publication", "package_to_experiment", "learned_boost",
     "rerank_with_experience", "classify_hook", "classify_title",
+    "calibrate", "calibration_report",
 ]

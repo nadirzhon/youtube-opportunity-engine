@@ -203,10 +203,20 @@ def feedback(topic: str, body: FeedbackBody) -> dict[str, Any]:
     source_titles = [a.video_id for a in r.breakouts]
     pkg = build_opportunity(opp, source_titles=source_titles)
     eid = record_publication(_db(), pkg, performance=body.performance,
-                             publish_hour=body.publish_hour, video_url=body.video_url)
+                             publish_hour=body.publish_hour, video_url=body.video_url,
+                             opportunity=opp)   # store raw dims → scorer self-calibrates
     n = store.experiment_count(_db())
     return {"ok": True, "experiment_id": eid, "experiments_recorded": n,
             "topic": topic, "performance": max(0.0, min(1.0, body.performance))}
+
+
+@app.get("/calibration")
+def scoring_calibration() -> dict[str, Any]:
+    """How the opportunity scorer has re-weighted itself from real outcomes:
+    per-dimension correlation with performance and the weight shift vs the spec
+    priors. With few experiments the weights stay near the priors (regularized)."""
+    from .learning import calibration_report
+    return calibration_report(store.load_experiments(_db()))
 
 
 @app.get("/insights")

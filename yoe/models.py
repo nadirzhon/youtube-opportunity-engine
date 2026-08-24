@@ -99,11 +99,12 @@ class Opportunity:
     score: float                       # 0..100
     confidence: float                  # 0..1
     stage: TrendStage
-    breakdown: dict[str, float]        # per-dimension contribution
+    breakdown: dict[str, float]        # per-dimension weighted contribution
     evidence: list[str]
     reasons_against: list[str]
     sample_video_ids: list[str]
     recommended_action: str
+    dimensions: dict[str, float] = field(default_factory=dict)  # raw 0..1 signals
 
     def to_dict(self) -> dict[str, Any]:
         d = self.__dict__.copy()
