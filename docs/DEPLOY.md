@@ -73,8 +73,20 @@ sudo systemctl enable --now yoe-api yoe-worker
 data freshness. `worker_stale` flips true if no heartbeat has landed in ~3×
 the interval — wire that into any uptime check (e.g. a cron `curl` + alert).
 
-## Scaling later (external, not required for 24/7)
+## Postgres (multi-host / high concurrency)
 
 sqlite handles a single-host worker + API comfortably (WAL mode, busy timeout).
-For multi-host or high write concurrency, swap `DATABASE_URL` to Postgres once the
-adapter phase lands — the store interface is the seam.
+For multi-host or high write concurrency, switch to Postgres — the store speaks
+both; only `DATABASE_URL` changes.
+
+```bash
+docker compose --profile postgres up -d          # start the postgres service too
+# point api + worker at it (in .env):
+DATABASE_URL=postgresql://yoe:yoe@postgres:5432/yoe
+docker compose up -d                              # recreate api + worker
+```
+
+The same schema and queries run on either engine (`ON CONFLICT` idempotency,
+JSON dimension round-trips, the heartbeat KV — all verified against postgres:16).
+`psycopg[binary]` is already in `requirements-api.txt`. To run the Postgres test
+suite locally: `YOE_TEST_PG_URL=postgresql://… pytest tests/test_postgres.py`.

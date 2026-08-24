@@ -57,8 +57,16 @@ CREATE TABLE IF NOT EXISTS kv (
 """
 
 
+def _resolve_url(url: str | None) -> str:
+    return url or os.environ.get("DATABASE_URL") or "sqlite:///yoe.db"
+
+
+def _is_postgres(url: str) -> bool:
+    return url.startswith(("postgres://", "postgresql://"))
+
+
 def _url_to_path(url: str | None) -> str:
-    url = url or os.environ.get("DATABASE_URL") or "sqlite:///yoe.db"
+    url = _resolve_url(url)
     if url.startswith("sqlite:///"):
         return url[len("sqlite:///"):]
     if url.startswith("sqlite://"):
@@ -66,8 +74,94 @@ def _url_to_path(url: str | None) -> str:
     return url  # already a plain path or :memory:
 
 
-def connect(url: str | None = None) -> sqlite3.Connection:
-    path = _url_to_path(url)
+# ---------------------------------------------------------------------------
+# Postgres adapter — a thin wrapper that presents the exact sqlite3 surface the
+# rest of this module uses (execute/executescript/commit/close, cursor.lastrowid,
+# rows addressable by both name and index). Same code, same SQL, other engine.
+# Postgres is the multi-host / high-concurrency option; sqlite stays the default.
+# ---------------------------------------------------------------------------
+def _pg_translate_ddl(script: str) -> list[str]:
+    """sqlite schema → Postgres: autoincrement PK becomes BIGSERIAL. Everything
+    else in our schema (IF NOT EXISTS, ON CONFLICT ... excluded, UNIQUE, REAL) is
+    already valid Postgres. Returns individual statements (psycopg runs one/exec)."""
+    script = script.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY")
+    return [s.strip() for s in script.split(";") if s.strip()]
+
+
+class _PgRow(dict):
+    """Row addressable by column name (like sqlite3.Row) AND by position."""
+    def __init__(self, cols, values):
+        super().__init__(zip(cols, values))
+        self._v = tuple(values)
+
+    def __getitem__(self, k):
+        return self._v[k] if isinstance(k, int) else dict.__getitem__(self, k)
+
+
+def _pg_row_factory(cursor):
+    cols = [c.name for c in cursor.description] if cursor.description else []
+    def make(values):
+        return _PgRow(cols, values)
+    return make
+
+
+class _PgCursor:
+    def __init__(self, raw, conn):
+        self._raw, self._conn = raw, conn
+
+    def fetchone(self):
+        return self._raw.fetchone()
+
+    def fetchall(self):
+        return self._raw.fetchall()
+
+    @property
+    def lastrowid(self):
+        with self._conn._pg.cursor() as c:
+            c.execute("SELECT lastval()")
+            row = c.fetchone()
+            return row[0] if row else None
+
+
+class _PgConnection:
+    """Presents the sqlite3.Connection surface over a psycopg connection."""
+    def __init__(self, pg):
+        self._pg = pg
+        self._pg.autocommit = True   # mirror sqlite's per-statement durability
+
+    def execute(self, sql, params=()):
+        cur = self._pg.cursor(row_factory=_pg_row_factory)
+        cur.execute(sql.replace("?", "%s"), tuple(params))
+        return _PgCursor(cur, self)
+
+    def executescript(self, script):
+        with self._pg.cursor() as cur:
+            for stmt in _pg_translate_ddl(script):
+                cur.execute(stmt)
+
+    def commit(self):
+        pass  # autocommit on
+
+    def close(self):
+        self._pg.close()
+
+    def __getattr__(self, name):
+        return getattr(self._pg, name)
+
+
+def _connect_postgres(url: str):
+    import psycopg  # lazy: only when a Postgres URL is configured
+    conn = _PgConnection(psycopg.connect(url))
+    conn.executescript(_SCHEMA)
+    return conn
+
+
+def connect(url: str | None = None):
+    resolved = _resolve_url(url)
+    if _is_postgres(resolved):
+        return _connect_postgres(resolved)
+
+    path = _url_to_path(resolved)
     conn = sqlite3.connect(path, check_same_thread=False, timeout=30.0)
     conn.row_factory = sqlite3.Row
     if path != ":memory:":
@@ -80,7 +174,7 @@ def connect(url: str | None = None) -> sqlite3.Connection:
     return conn
 
 
-def init_db(conn: sqlite3.Connection) -> None:
+def init_db(conn) -> None:
     conn.executescript(_SCHEMA)
 
 

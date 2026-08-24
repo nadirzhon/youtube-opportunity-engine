@@ -44,5 +44,26 @@ services:
     depends_on:
       - api
 
+  # Optional Postgres for multi-host / high-concurrency deployments.
+  # Enable with:  docker compose --profile postgres up -d
+  # then point the api + worker at it:
+  #   DATABASE_URL=postgresql://yoe:yoe@postgres:5432/yoe
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["postgres"]
+    environment:
+      - POSTGRES_USER=yoe
+      - POSTGRES_PASSWORD=yoe
+      - POSTGRES_DB=yoe
+    volumes:
+      - yoe-pg:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yoe"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   yoe-data:
+  yoe-pg:

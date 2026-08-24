@@ -90,7 +90,9 @@ Example output (the planted trend surfaces as the #1 opportunity):
 | 7 · Learning loop | Thompson-sampling bandit, insights/feature-importance, niche priors, **closed feedback loop** (publish→measure→remember→bias next `/build`) | ✅ **done** |
 | 8 · Hardening | API-key auth + RBAC, CI workflow, cost budgets | ✅ **done** |
 | 9 · 24/7 runtime | autonomous worker (collect→analyze→build→learn loop), heartbeat + `/status`, graceful shutdown, error-isolated backoff, Docker/systemd deploy | ✅ **done** |
-| — remaining | real YouTube run at scale · Postgres/Alembic · real media providers | ▫ external (needs keys) |
+| 10 · Self-calibrating scoring | scoring weights learn from real outcomes (dimension↔performance correlation, regularized toward spec priors), `GET /calibration` | ✅ **done** |
+| 11 · Postgres | same store on sqlite **or** Postgres (verified against postgres:16), compose `postgres` profile | ✅ **done** |
+| — remaining | real YouTube run at scale · real media providers (TTS/image) · real LLM prose | ▫ external (needs keys) |
 
 Each phase is a self-contained turn — the core here is the foundation
 everything else calls into (`yoe/pipeline.py`).
@@ -128,7 +130,9 @@ yoe/
   trend.py             topic clustering + trend stages
   opportunity.py       weighted scoring, breakdown, confidence, reasons-against
   pipeline.py          end-to-end orchestrator (run · run_from_store)
-  store.py             sqlite3 time-series persistence (collector + reader)
+  store.py             time-series persistence — sqlite3 or Postgres (same API)
+  keyphrase.py         niche extraction from titles + creator tags
+  learning/calibration.py  self-calibrating scoring weights from real outcomes
   api.py               FastAPI app
   config.py            env settings, mock fallback
   demo.py              runnable E2E
