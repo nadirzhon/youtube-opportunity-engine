@@ -84,11 +84,42 @@ class Worker:
             self._quota_day = today
             log.info("new UTC day %s — daily quota/budget reset", today)
 
+    def _provider_for_cycle(self):
+        """Build this cycle's provider. With a real key + auto-discovery on, the
+        watch set is grown autonomously from live trending and persisted — no
+        hand-fed channel list required (YOUTUBE_CHANNEL_IDS just seeds it)."""
+        import os
+        s = self.settings
+        if not s.has_youtube:
+            return get_provider(s), 0            # mock
+
+        from . import discovery
+        from .providers.youtube import YouTubeDataProvider
+        watch = store.get_state(self.conn, "watch_channels", []) or []
+        seed = [c for c in os.environ.get("YOUTUBE_CHANNEL_IDS", "").split(",") if c]
+        watch = discovery.merge_watch_set(seed, watch, cap=s.watch_set_cap)
+
+        # (re)discover on the first cycle, when empty, or every N cycles
+        due = s.youtube_auto_discover and (
+            not watch or self._cycles % max(1, s.discovery_every_cycles) == 0)
+        if due:
+            cats = (tuple(c.strip() or None for c in s.youtube_categories.split(","))
+                    if s.youtube_categories else discovery.DEFAULT_CATEGORIES)
+            found = discovery.discover_channels(
+                s.youtube_api_key, region=s.youtube_region, category_ids=cats,
+                max_channels=s.discovery_max_channels)
+            watch = discovery.merge_watch_set(watch, found, cap=s.watch_set_cap)
+            log.info("discovery: watch set now %d channels (+%d newly found)",
+                     len(watch), len(found))
+
+        store.set_state(self.conn, "watch_channels", watch)
+        return YouTubeDataProvider(s.youtube_api_key, watch), len(watch)
+
     def run_cycle(self) -> dict:
-        """One collect→analyze→(build)→record pass. Returns a summary dict.
+        """One discover→collect→analyze→(build)→record pass. Returns a summary.
         Raises nothing that run_forever can't absorb; still, callers get truth."""
         self._maybe_roll_quota_day()
-        provider = get_provider(self.settings)
+        provider, watching = self._provider_for_cycle()
         prov = "mock" if getattr(provider, "is_mock", False) else "youtube"
 
         sched = tick(self.conn, provider, self.quota)
@@ -105,6 +136,7 @@ class Worker:
             "cycle": self._cycles,
             "at": _now(),
             "provider": prov,
+            "watching_channels": watching,
             "collected": sched.collected,
             "skipped_over_budget": sched.skipped_over_budget,
             "opportunities": [{"topic": o.topic, "score": round(o.score, 1),

@@ -109,7 +109,14 @@ docker compose up -d --build     # api on :8000 + worker, both restart:unless-st
 curl localhost:8000/status       # worker heartbeat, cycles, last error, data freshness
 ```
 
-The worker each cycle: collects a snapshot pass under quota → re-runs the engine on
+**Fully autonomous — no hand-fed channel list.** With an API key the worker
+*discovers what to watch by itself* from YouTube's live trending charts (zero
+seed), harvests the channels behind those videos, persists a growing watch set,
+and re-discovers periodically so its universe expands on its own. Connect the key
+and it does the rest. (`YOUTUBE_CHANNEL_IDS` only *seeds* the set if you want.)
+
+The worker each cycle: **discovers/expands the watch set** → collects a snapshot
+pass under quota → re-runs the engine on
 accumulated history → (optionally) builds the top opportunity → learns from results
 → writes a heartbeat. It **never dies on a bad cycle** (error-isolated, exponential
 backoff), **shuts down gracefully** on SIGTERM, and **degrades safely** (no key →

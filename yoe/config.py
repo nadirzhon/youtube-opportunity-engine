@@ -30,6 +30,17 @@ class Settings:
     worker_min_opp_score: float = float(os.environ.get("WORKER_MIN_OPP_SCORE", "65") or 65)
     worker_max_backoff_sec: int = int(os.environ.get("WORKER_MAX_BACKOFF_SEC", "900") or 900)
 
+    # -- autonomous discovery ---------------------------------------------
+    # When true (default), the worker finds channels to watch by itself from live
+    # trending — no hand-fed list needed. YOUTUBE_CHANNEL_IDS still seeds it.
+    youtube_auto_discover: bool = (os.environ.get("YOUTUBE_AUTO_DISCOVER", "true").lower()
+                                   in ("1", "true", "yes"))
+    youtube_region: str = os.environ.get("YOUTUBE_REGION", "US")
+    youtube_categories: str = os.environ.get("YOUTUBE_CATEGORIES", "")  # csv; "" = default spread
+    discovery_max_channels: int = int(os.environ.get("DISCOVERY_MAX_CHANNELS", "40") or 40)
+    discovery_every_cycles: int = int(os.environ.get("DISCOVERY_EVERY_CYCLES", "4") or 4)
+    watch_set_cap: int = int(os.environ.get("WATCH_SET_CAP", "200") or 200)
+
     @property
     def has_youtube(self) -> bool:
         return bool(self.youtube_api_key)
