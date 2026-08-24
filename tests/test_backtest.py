@@ -65,6 +65,21 @@ def test_run_backtest_structure_and_honesty():
     assert r["topics"] == sorted(r["topics"], key=lambda t: t["score"], reverse=True)
 
 
+def test_leading_indicator_gives_early_edge():
+    """Locks in the backtest-driven improvement: with the momentum leading
+    indicator, scoring at an EARLY cutoff has positive predictive edge."""
+    p = MockYouTubeProvider(1337)
+    channels = p.list_channels()
+    vbc = {c.channel_id: p.list_videos(c.channel_id) for c in channels}
+    # momentum is now a scored dimension
+    from yoe.pipeline import run
+    assert "momentum" in run(p).opportunities[0].dimensions
+    # early decision (young videos) → the score tracks realized future growth
+    r = bt.run_backtest(channels, vbc, cutoff_hours=24, k=3)
+    assert r["spearman_score_vs_growth"] > 0.3
+    assert r["lift_over_base"] >= 1.0
+
+
 def test_calibration_labels_are_valid_experiments():
     p = MockYouTubeProvider(1337)
     channels = p.list_channels()

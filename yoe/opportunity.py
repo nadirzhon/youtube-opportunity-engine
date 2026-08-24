@@ -19,15 +19,19 @@ import math
 from .models import AnomalyClass, AnomalyResult, Opportunity, TopicCluster, TrendStage
 
 WEIGHTS = {
-    "trend_velocity": 0.18,
-    "anomaly_strength": 0.16,
+    # Leading indicators (predict *future* growth) are weighted above magnitude
+    # signals (which describe what already happened) — backtesting showed a
+    # magnitude-heavy score flags past winners, not future ones.
+    "momentum": 0.14,               # youth × still-accelerating = runway ahead (leading)
+    "trend_velocity": 0.12,         # aggregate velocity — magnitude, lagging → downweighted
+    "anomaly_strength": 0.14,
     "growth_acceleration": 0.12,
-    "competition_inverse": 0.13,
-    "saturation_inverse": 0.09,
-    "repeatability": 0.11,
+    "competition_inverse": 0.12,
+    "saturation_inverse": 0.08,
+    "repeatability": 0.10,
     "creator_fit": 0.06,
-    "monetization_potential": 0.06,
-    "production_feasibility": 0.05,
+    "monetization_potential": 0.05,
+    "production_feasibility": 0.03,
     "freshness": 0.04,
 }
 
@@ -52,10 +56,17 @@ def _dimensions(cluster: TopicCluster, anomalies: list[AnomalyResult],
     saturation = 0.0 if cluster.stage in _OPEN_STAGES else (
         1.0 if cluster.stage in (TrendStage.SATURATED, TrendStage.DECLINING) else 0.5)
 
+    young_share = cluster.signals.get("young_share", 0.0)
+    accel_pos = max(0.0, min(1.0, 0.5 + cluster.acceleration * 5))
+    # Leading indicator: a topic whose videos are young AND still accelerating has
+    # growth runway ahead; a mature high-velocity topic has already spent it.
+    momentum = round(young_share * accel_pos, 4)
+
     return {
+        "momentum": momentum,
         "trend_velocity": _norm_log(cluster.velocity, 5000),
         "anomaly_strength": max_anom,
-        "growth_acceleration": max(0.0, min(1.0, 0.5 + cluster.acceleration * 5)),
+        "growth_acceleration": accel_pos,
         "competition_inverse": 1.0 - competition,
         "saturation_inverse": 1.0 - saturation,
         "repeatability": min(1.0, (n_ch - 1) / 4.0) * (0.5 + 0.5 * spread),
@@ -91,11 +102,13 @@ def _reasons_against(cluster: TopicCluster, dims: dict[str, float], conf: float)
 
 
 def _action(score: float, stage: TrendStage, conf: float) -> str:
-    if score >= 70 and stage in _OPEN_STAGES and conf >= 0.6:
+    # Thresholds recalibrated after leading-indicator reweighting recentred the
+    # score scale (magnitude signals downweighted → top scores land lower).
+    if score >= 58 and stage in _OPEN_STAGES and conf >= 0.6:
         return "Pursue now — strong, open, well-supported."
-    if score >= 55 and stage in _OPEN_STAGES:
+    if score >= 45 and stage in _OPEN_STAGES:
         return "Build a concept and test — promising but verify."
-    if score >= 40:
+    if score >= 33:
         return "Watch — add to the monitor list, revisit in 48–72h."
     return "Skip — weak or saturated."
 

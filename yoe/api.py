@@ -210,6 +210,25 @@ def feedback(topic: str, body: FeedbackBody) -> dict[str, Any]:
             "topic": topic, "performance": max(0.0, min(1.0, body.performance))}
 
 
+@app.get("/backtest")
+def backtest(cutoff_hours: float = Query(24, ge=1),
+             k: int = Query(3, ge=1, le=50)) -> dict[str, Any]:
+    """Validate the score against reality: score the stored world as of
+    `cutoff_hours` and grade against realized growth after it. Needs accumulated
+    snapshot history (let the worker run) — with a single reading there is no
+    'future' to measure and it reports inconclusive."""
+    from . import backtest as bt
+    from .store import load_channels, load_videos
+    channels = load_channels(_db())
+    videos = load_videos(_db())
+    by_ch: dict[str, list] = {}
+    for v in videos:
+        by_ch.setdefault(v.channel_id, []).append(v)
+    if not channels:
+        return {"verdict": "no data — run a scan/collect first.", "n_topics_evaluated": 0}
+    return bt.run_backtest(channels, by_ch, cutoff_hours=cutoff_hours, k=k)
+
+
 @app.get("/calibration")
 def scoring_calibration() -> dict[str, Any]:
     """How the opportunity scorer has re-weighted itself from real outcomes:
