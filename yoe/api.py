@@ -132,11 +132,19 @@ def scan(mock: bool = Query(False, description="Force the mock provider")) -> Sc
 @app.get("/opportunities")
 def opportunities(limit: int = Query(20, ge=1, le=200),
                   min_score: float = Query(0, ge=0, le=100),
-                  stage: str | None = None) -> dict[str, Any]:
+                  stage: str | None = None,
+                  rank: str = Query("score", pattern="^(score|profit)$")) -> dict[str, Any]:
+    """`rank=profit` sorts by profit priority (growth × estimated niche RPM) and
+    attaches an `economics` block (RPM estimate + worth-generating verdict)."""
+    from . import economics
     r = _report()
     items = [o.to_dict() for o in r.opportunities
              if o.score >= min_score and (stage is None or o.stage.value == stage)]
-    return {"count": len(items), "opportunities": items[:limit]}
+    if rank == "profit":
+        items = economics.rank_by_profit(items)
+    else:
+        items = [economics.enrich(o) for o in items]
+    return {"count": len(items), "ranked_by": rank, "opportunities": items[:limit]}
 
 
 @app.get("/opportunities/{topic}")

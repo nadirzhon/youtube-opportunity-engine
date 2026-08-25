@@ -76,3 +76,33 @@ def test_merge_watch_set_unions_and_caps():
     merged = discovery.merge_watch_set(["A", "B"], ["B", "C", "D"], cap=3)
     assert merged == ["A", "B", "C"]          # order-stable union, capped
     assert discovery.merge_watch_set([], ["X"]) == ["X"]
+
+
+def _vitem(ch, views, published):
+    return {"snippet": {"channelId": ch, "publishedAt": published},
+            "statistics": {"viewCount": str(views)}}
+
+
+def test_velocity_ranks_fast_gainers_over_big_slow_ones():
+    import datetime as dt
+    now = dt.datetime(2026, 1, 2, tzinfo=dt.timezone.utc)
+    items = [
+        # SMALL fast: 100k views in ~1h → very high velocity
+        _vitem("small", 100_000, "2026-01-02T23:00:00+00:00".replace("2026-01-02T23", "2026-01-01T23")),
+        # BIG slow: 1M views but over ~24h → lower velocity
+        _vitem("big", 1_000_000, "2026-01-01T02:00:00+00:00"),
+    ]
+    ranked = discovery.channel_ids_by_velocity(items, now)
+    assert ranked[0] == "small"               # speed beats size
+
+
+def test_discover_channels_velocity_first_uses_injected_now():
+    import datetime as dt
+    now = dt.datetime(2026, 1, 2, tzinfo=dt.timezone.utc)
+    svc = _FakeService([{"items": [
+        _vitem("A", 10_000, "2026-01-01T22:00:00+00:00"),     # ~28h → slow
+        _vitem("B", 50_000, "2026-01-02T00:00:00+00:00"),     # ~26h but more → faster
+    ]}])
+    chans = discovery.discover_channels("k", category_ids=(None,), service=svc,
+                                        velocity_first=True, now=now)
+    assert chans[0] == "B"

@@ -42,6 +42,37 @@ def channel_ids_from_items(items: list[dict]) -> list[str]:
     return out
 
 
+def _age_hours(iso: str, now: dt.datetime) -> float:
+    if not iso:
+        return 1e9
+    try:
+        published = dt.datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    except ValueError:
+        return 1e9
+    return max(1.0, (now - published).total_seconds() / 3600.0)
+
+
+def video_velocity(item: dict, now: dt.datetime) -> float:
+    """Views gained per hour since publish — speed, not size. This is the signal
+    the user wants: who racked up views fastest, regardless of subscriber count."""
+    stats = item.get("statistics") or {}
+    views = int(stats.get("viewCount", 0) or 0)
+    age = _age_hours((item.get("snippet") or {}).get("publishedAt", ""), now)
+    return views / age
+
+
+def channel_ids_by_velocity(items: list[dict], now: dt.datetime) -> list[str]:
+    """Channel ids ranked by the fastest-accelerating video they own — so small
+    channels with a video exploding right now outrank big channels coasting."""
+    best: dict[str, float] = {}
+    for it in items:
+        ch = (it.get("snippet") or {}).get("channelId")
+        if not ch:
+            continue
+        best[ch] = max(best.get(ch, 0.0), video_velocity(it, now))
+    return [ch for ch, _ in sorted(best.items(), key=lambda kv: kv[1], reverse=True)]
+
+
 def fetch_trending(service, *, region: str = "US",
                    category_ids=DEFAULT_CATEGORIES, per_category: int = 30) -> list[dict]:
     """Raw trending video items across the given categories (1 unit per call)."""
@@ -74,12 +105,18 @@ def fetch_search(service, query: str, *, days: int = 7, order: str = "viewCount"
 
 def discover_channels(api_key: str, *, region: str = "US",
                       category_ids=DEFAULT_CATEGORIES, per_category: int = 30,
-                      max_channels: int = 40, service=None) -> list[str]:
-    """Autonomously discover channels to watch from live trending. `service` can
-    be injected for tests; otherwise it's built from the api_key."""
+                      max_channels: int = 40, service=None,
+                      velocity_first: bool = True, now: dt.datetime | None = None) -> list[str]:
+    """Autonomously discover channels to watch from live trending. By default
+    ranks by video view-*velocity* (fastest gainers), not popularity/size, so
+    small channels with an exploding video are surfaced. `service`/`now` are
+    injectable for tests."""
     svc = service or _service(api_key)
     items = fetch_trending(svc, region=region, category_ids=category_ids,
                            per_category=per_category)
+    if velocity_first:
+        now = now or dt.datetime.now(dt.timezone.utc)
+        return channel_ids_by_velocity(items, now)[:max_channels]
     return channel_ids_from_items(items)[:max_channels]
 
 
