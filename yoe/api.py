@@ -186,33 +186,44 @@ def build(topic: str) -> dict[str, Any]:
         raise HTTPException(404, f"no opportunity for topic '{topic}'")
     source_titles = [a.video_id for a in r.breakouts]
     # bias concept choice by what has historically worked for this niche
-    from .learning import learned_boost
+    from .learning import learned_boost, publication_record
     experience = learned_boost(store.load_experiments(_db(), niche=topic))
     pkg = build_opportunity(opp, source_titles=source_titles, experience=experience)
-    return pkg.to_dict()
+    # Persist THIS built variant so a later /feedback links the outcome to it
+    # (by publication_id) instead of regenerating a fresh package.
+    pub_id = store.save_publication(_db(), publication_record(pkg, opportunity=opp))
+    out = pkg.to_dict()
+    out["publication_id"] = pub_id
+    return out
 
 
 class FeedbackBody(BaseModel):
     performance: float          # 0..1 normalized outcome (e.g. views vs expectation)
+    publication_id: int | None = None   # link the result to the exact built variant
     publish_hour: int | None = None
     video_url: str | None = None
 
 
 @app.post("/feedback/{topic}")
 def feedback(topic: str, body: FeedbackBody) -> dict[str, Any]:
-    """Report a produced asset's measured performance. This is the loop closing:
-    the outcome is stored as an experiment and biases every future /build."""
-    from .agents import build_opportunity
-    from .learning import record_publication
-    r = _report()
-    opp = next((o for o in r.opportunities if o.topic == topic), None)
-    if opp is None:
-        raise HTTPException(404, f"no opportunity for topic '{topic}'")
-    source_titles = [a.video_id for a in r.breakouts]
-    pkg = build_opportunity(opp, source_titles=source_titles)
-    eid = record_publication(_db(), pkg, performance=body.performance,
-                             publish_hour=body.publish_hour, video_url=body.video_url,
-                             opportunity=opp)   # store raw dims → scorer self-calibrates
+    """Report a produced asset's measured performance. Pass `publication_id` (from
+    /build) so the outcome links to the EXACT variant you published; without it we
+    fall back to rebuilding the package for backward compatibility."""
+    from .learning import record_publication, record_result_for_publication
+    if body.publication_id is not None:
+        eid = record_result_for_publication(
+            _db(), body.publication_id, performance=body.performance,
+            publish_hour=body.publish_hour, video_url=body.video_url)
+    else:
+        from .agents import build_opportunity
+        r = _report()
+        opp = next((o for o in r.opportunities if o.topic == topic), None)
+        if opp is None:
+            raise HTTPException(404, f"no opportunity for topic '{topic}'")
+        pkg = build_opportunity(opp, source_titles=[a.video_id for a in r.breakouts])
+        eid = record_publication(_db(), pkg, performance=body.performance,
+                                 publish_hour=body.publish_hour, video_url=body.video_url,
+                                 opportunity=opp)
     n = store.experiment_count(_db())
     return {"ok": True, "experiment_id": eid, "experiments_recorded": n,
             "topic": topic, "performance": max(0.0, min(1.0, body.performance))}

@@ -4,6 +4,7 @@ from .insights import insights, niche_priors
 from .feedback import (
     record_publication, package_to_experiment, learned_boost,
     rerank_with_experience, classify_hook, classify_title,
+    publication_record, record_result_for_publication,
 )
 from .calibration import calibrate, calibration_report
 __all__ = [

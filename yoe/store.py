@@ -51,6 +51,11 @@ CREATE TABLE IF NOT EXISTS experiments (
   performance REAL, video_url TEXT, dimensions TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_exp_niche ON experiments(niche);
+CREATE TABLE IF NOT EXISTS publications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT,
+  topic TEXT, niche TEXT, angle TEXT, hook_style TEXT, title_structure TEXT,
+  title TEXT, duration_sec INTEGER, dimensions TEXT, video_url TEXT
+);
 CREATE TABLE IF NOT EXISTS kv (
   key TEXT PRIMARY KEY, value TEXT, updated_at TEXT
 );
@@ -181,14 +186,28 @@ def init_db(conn) -> None:
 # ---------------------------------------------------------------------------
 # Collection — persist a provider's readings, accumulating history.
 # ---------------------------------------------------------------------------
-def collect(conn: sqlite3.Connection, provider) -> dict:
-    now = dt.datetime.now(dt.timezone.utc).isoformat()
+def _channel_cadence_hours(min_age: float) -> float:
+    """How long before a channel is worth re-fetching, from its youngest video's
+    age (the scheduler's adaptive rule): fresh channels often, mature rarely."""
+    from .scheduler import sampling_priority
+    return {"high": 1.0, "medium": 6.0, "low": 24.0}[sampling_priority(min_age)]
+
+
+def collect(conn: sqlite3.Connection, provider, *, adaptive: bool = False,
+            now_dt: dt.datetime | None = None) -> dict:
+    """Persist a provider's readings. With `adaptive=True`, channels not yet due
+    (per their maturity-based cadence) are skipped — so mature channels aren't
+    re-fetched every cycle, saving real API quota. Due-times persist in kv."""
+    now_dt = now_dt or dt.datetime.now(dt.timezone.utc)
+    now = now_dt.isoformat()
     prov = "mock" if getattr(provider, "is_mock", False) else "youtube"
     cur = conn.execute(
         "INSERT INTO runs(started_at, provider, state) VALUES(?,?,?)", (now, prov, "running"))
     run_id = cur.lastrowid
 
-    n_ch = n_vid = n_snap = 0
+    next_due = get_state(conn, "channel_next_due", {}) or {}
+
+    n_ch = n_vid = n_snap = n_skipped = 0
     for ch in provider.list_channels():
         conn.execute(
             "INSERT INTO channels(channel_id,title,subscriber_count,video_count,topics,updated_at)"
@@ -196,8 +215,17 @@ def collect(conn: sqlite3.Connection, provider) -> dict:
             " title=excluded.title, subscriber_count=excluded.subscriber_count,"
             " video_count=excluded.video_count, topics=excluded.topics, updated_at=excluded.updated_at",
             (ch.channel_id, ch.title, ch.subscriber_count, ch.video_count, ",".join(ch.topics), now))
+        # Adaptive skip: not due yet → don't spend quota fetching its videos.
+        due_at = next_due.get(ch.channel_id)
+        if adaptive and due_at and now < due_at:
+            n_skipped += 1
+            continue
+        vids = provider.list_videos(ch.channel_id)
         n_ch += 1
-        for v in provider.list_videos(ch.channel_id):
+        min_age = min((v.published_hours_ago for v in vids), default=999.0)
+        next_due[ch.channel_id] = (now_dt + dt.timedelta(
+            hours=_channel_cadence_hours(min_age))).isoformat()
+        for v in vids:
             conn.execute(
                 "INSERT INTO videos(video_id,channel_id,title,published_hours_ago,duration_sec,category,topics)"
                 " VALUES(?,?,?,?,?,?,?) ON CONFLICT(video_id) DO UPDATE SET"
@@ -219,11 +247,13 @@ def collect(conn: sqlite3.Connection, provider) -> dict:
                 if not exists:
                     n_snap += 1  # count only genuinely new time points
 
+    set_state(conn, "channel_next_due", next_due)
     conn.execute("UPDATE runs SET state=?, finished_at=?, channels=?, videos=?, snapshots=? WHERE id=?",
                  ("completed", dt.datetime.now(dt.timezone.utc).isoformat(), n_ch, n_vid, n_snap, run_id))
     conn.commit()
     return {"run_id": run_id, "provider": prov, "channels": n_ch,
-            "videos": n_vid, "snapshots": n_snap, "state": "completed"}
+            "videos": n_vid, "snapshots": n_snap, "skipped_channels": n_skipped,
+            "state": "completed"}
 
 
 # ---------------------------------------------------------------------------
@@ -294,6 +324,38 @@ def load_experiments(conn: sqlite3.Connection, niche: str | None = None) -> list
 
 def experiment_count(conn: sqlite3.Connection) -> int:
     return conn.execute("SELECT COUNT(*) FROM experiments").fetchone()[0]
+
+
+# ---------------------------------------------------------------------------
+# Publications — the actual built-and-published variant, stored so a later
+# performance report links to THIS content (not a fresh regeneration).
+# ---------------------------------------------------------------------------
+def save_publication(conn: sqlite3.Connection, pub: dict) -> int:
+    import json
+    now = dt.datetime.now(dt.timezone.utc).isoformat()
+    dims = pub.get("dimensions")
+    cur = conn.execute(
+        "INSERT INTO publications(created_at,topic,niche,angle,hook_style,title_structure,"
+        "title,duration_sec,dimensions,video_url) VALUES(?,?,?,?,?,?,?,?,?,?)",
+        (now, pub.get("topic"), pub.get("niche"), pub.get("angle"),
+         pub.get("hook_style"), pub.get("title_structure"), pub.get("title"),
+         pub.get("duration_sec"), json.dumps(dims) if dims else None, pub.get("video_url")))
+    conn.commit()
+    return cur.lastrowid
+
+
+def get_publication(conn: sqlite3.Connection, pub_id: int) -> dict | None:
+    import json
+    row = conn.execute("SELECT * FROM publications WHERE id=?", (pub_id,)).fetchone()
+    if not row:
+        return None
+    d = dict(row)
+    if d.get("dimensions"):
+        try:
+            d["dimensions"] = json.loads(d["dimensions"])
+        except (ValueError, TypeError):
+            d["dimensions"] = None
+    return d
 
 
 # ---------------------------------------------------------------------------

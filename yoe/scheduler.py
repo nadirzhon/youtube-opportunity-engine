@@ -38,26 +38,29 @@ class SchedulerResult:
     skipped_over_budget: bool = False
 
 
-def tick(conn, provider, quota: QuotaManager | None = None) -> SchedulerResult:
-    """Run one scheduled collection pass under quota control."""
+def tick(conn, provider, quota: QuotaManager | None = None, *,
+         adaptive: bool = False) -> SchedulerResult:
+    """Run one scheduled collection pass under quota control. With `adaptive`, the
+    collector skips channels not yet due (maturity-based cadence) — so quota is
+    charged only for channels actually fetched, not the whole watch set."""
     quota = quota or QuotaManager()
-    # Estimate per channel: channels.list contentDetails (1) + playlistItems.list
+    # Per fetched channel: channels.list contentDetails (1) + playlistItems.list
     # (1) + videos.list (1) = 3 units — the uploads-playlist path, ~30× cheaper
     # than the old search.list (100 units) approach.
     channels = provider.list_channels()
     per_channel = (quota.estimate_quota("channels.list")
                    + quota.estimate_quota("playlistItems.list")
                    + quota.estimate_quota("videos.list"))
-    est = quota.estimate_quota("channels.list") + len(channels) * per_channel
-    if quota.quota_used + est > quota.daily_quota:
+    # Skip the cycle if we can't afford even the channel list + one channel fetch.
+    if quota.quota_used + quota.estimate_quota("channels.list") + per_channel > quota.daily_quota:
         return SchedulerResult(collected={"channels": 0, "videos": 0, "snapshots": 0},
                                quota=quota.status(), skipped_over_budget=True)
 
     quota.charge_quota("channels.list")
-    for _ in channels:
-        quota.charge_quota("channels.list")      # contentDetails lookup
-        quota.charge_quota("playlistItems.list")
-        quota.charge_quota("videos.list")
+    result = collect(conn, provider, adaptive=adaptive)
+    # Account for what was actually spent (channels fetched × per-channel cost).
+    # Set directly rather than charge_quota() so a mid-cycle overrun records the
+    # usage instead of raising — the next cycle's pre-check then skips.
+    quota.quota_used += result.get("channels", 0) * per_channel
 
-    result = collect(conn, provider)
     return SchedulerResult(collected=result, quota=quota.status())

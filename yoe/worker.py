@@ -59,6 +59,7 @@ class Worker:
         self._cycles = 0
         self._errors = 0
         self._quota_day = dt.datetime.now(dt.timezone.utc).date()
+        self._restore_quota()   # survive process restarts (e.g. every GitHub Action run)
 
     # -- lifecycle --------------------------------------------------------
     def request_stop(self, *_a) -> None:
@@ -74,6 +75,30 @@ class Worker:
                 pass  # not in main thread (e.g. tests) — caller drives the loop
 
     # -- one pass ---------------------------------------------------------
+    # -- quota persistence (survives process restarts / GitHub Action runs) --
+    def _restore_quota(self) -> None:
+        """Load accumulated quota/spend from the store. Without this every fresh
+        process (every 30-min GitHub Action) starts at zero and the daily cap is
+        never really enforced."""
+        st = store.get_state(self.conn, "quota_state") or {}
+        today = dt.datetime.now(dt.timezone.utc).date().isoformat()
+        month = today[:7]
+        if st.get("day") == today:
+            self.quota.quota_used = int(st.get("quota_used", 0))
+            self.quota.day_spend = float(st.get("day_spend", 0.0))
+        if st.get("month") == month:
+            self.quota.month_spend = float(st.get("month_spend", 0.0))
+        self._quota_day = dt.date.fromisoformat(st.get("day", today)) if st.get("day") else self._quota_day
+
+    def _persist_quota(self) -> None:
+        today = dt.datetime.now(dt.timezone.utc).date().isoformat()
+        store.set_state(self.conn, "quota_state", {
+            "day": today, "month": today[:7],
+            "quota_used": self.quota.quota_used,
+            "day_spend": round(self.quota.day_spend, 4),
+            "month_spend": round(self.quota.month_spend, 4),
+        })
+
     def _maybe_roll_quota_day(self) -> None:
         """Reset the daily YouTube quota + $ spend when the UTC date rolls over —
         without this a long-lived worker exhausts day 1's quota and then skips
@@ -81,7 +106,10 @@ class Worker:
         today = dt.datetime.now(dt.timezone.utc).date()
         if today != self._quota_day:
             self.quota.reset_day()
+            if today.strftime("%Y-%m") != self._quota_day.strftime("%Y-%m"):
+                self.quota.month_spend = 0.0        # new month → reset monthly budget
             self._quota_day = today
+            self._persist_quota()
             log.info("new UTC day %s — daily quota/budget reset", today)
 
     def _provider_for_cycle(self):
@@ -122,7 +150,8 @@ class Worker:
         provider, watching = self._provider_for_cycle()
         prov = "mock" if getattr(provider, "is_mock", False) else "youtube"
 
-        sched = tick(self.conn, provider, self.quota)
+        sched = tick(self.conn, provider, self.quota, adaptive=True)
+        self._persist_quota()   # remember spend so the next process run respects it
         report = run_from_store(self.conn)
         opps = [o for o in report.opportunities
                 if o.score >= self.settings.worker_min_opp_score]

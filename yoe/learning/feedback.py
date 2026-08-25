@@ -75,6 +75,45 @@ def package_to_experiment(package, performance: float, *,
     }
 
 
+def publication_record(package, opportunity=None, dimensions: dict | None = None) -> dict:
+    """The stored 'this is what we published' variant — the exact attributes, so a
+    later performance report links to THIS content, not a regeneration."""
+    if dimensions is None and opportunity is not None:
+        dimensions = getattr(opportunity, "dimensions", None)
+    c = package.chosen
+    title = c.title_hypotheses[0] if c.title_hypotheses else package.topic
+    return {
+        "topic": package.topic, "niche": package.topic,
+        "angle": c.unique_angle or "unspecified",
+        "hook_style": classify_hook(c.hook),
+        "title_structure": classify_title(title),
+        "title": title,
+        "duration_sec": int(c.suggested_duration_sec or 0),
+        "dimensions": dimensions or None,
+    }
+
+
+def record_result_for_publication(conn, publication_id: int, performance: float, *,
+                                  publish_hour: int | None = None,
+                                  video_url: str | None = None) -> int:
+    """Record measured performance against a STORED publication (by id) — the loop
+    now links the outcome to the real published variant, not a fresh package."""
+    from .. import store
+    pub = store.get_publication(conn, publication_id)
+    if pub is None:
+        raise ValueError(f"no publication #{publication_id}")
+    exp = {
+        "topic": pub["topic"], "niche": pub.get("niche") or pub["topic"],
+        "angle": pub.get("angle"), "hook_style": pub.get("hook_style"),
+        "title_structure": pub.get("title_structure"), "title": pub.get("title"),
+        "duration_sec": pub.get("duration_sec"), "publish_hour": publish_hour,
+        "performance": max(0.0, min(1.0, float(performance))),
+        "video_url": video_url or pub.get("video_url"),
+        "dimensions": pub.get("dimensions"),
+    }
+    return store.save_experiment(conn, exp)
+
+
 def record_publication(conn, package, performance: float, *,
                        publish_hour: int | None = None,
                        video_url: str | None = None,
