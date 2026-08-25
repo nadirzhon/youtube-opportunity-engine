@@ -218,6 +218,36 @@ def feedback(topic: str, body: FeedbackBody) -> dict[str, Any]:
             "topic": topic, "performance": max(0.0, min(1.0, body.performance))}
 
 
+@app.get("/recommendations")
+def recommendations(limit: int = Query(8, ge=1, le=50),
+                    with_full_brief: bool = Query(True)) -> dict[str, Any]:
+    """The advisor: ranked 'what to do next' actions (launch a channel / make a
+    video) with the reasoning and a creative brief (palette + art direction). For
+    the #1 pick it attaches the full package — script, hooks, thumbnail
+    directions — so you get a ready-to-shoot brief, not just a suggestion."""
+    from . import advisor, profiles as prof
+    r = _report()
+    opps = [o.to_dict() for o in r.opportunities]
+    recs = advisor.recommend(opps, profiles=prof.list_profiles(_db()), limit=limit)
+    if with_full_brief and recs:
+        top = next((o for o in r.opportunities if o.topic == recs[0]["topic"]), None)
+        if top is not None:
+            from .agents import build_opportunity
+            from .learning import learned_boost
+            exp = learned_boost(store.load_experiments(_db(), niche=top.topic))
+            pkg = build_opportunity(top, source_titles=[a.video_id for a in r.breakouts],
+                                    experience=exp)
+            recs[0]["full_brief"] = {
+                "chosen_title": pkg.chosen.title_hypotheses[0] if pkg.chosen.title_hypotheses else None,
+                "hook": pkg.chosen.hook,
+                "script": pkg.script.to_dict(),
+                "thumbnails": [t.to_dict() for t in pkg.thumbnails],
+                "quality": pkg.quality.to_dict(),
+            }
+    return {"headline": advisor.headline(recs), "count": len(recs),
+            "recommendations": recs}
+
+
 class ProfileBody(BaseModel):
     id: str
     name: str
