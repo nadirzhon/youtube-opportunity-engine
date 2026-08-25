@@ -220,7 +220,15 @@ def main() -> None:
     logging.basicConfig(
         level=os.environ.get("LOG_LEVEL", "INFO").upper(),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    Worker().run_forever()
+    # WORKER_MAX_CYCLES lets a scheduler (cron / GitHub Actions) run exactly one
+    # cycle and exit — the loop persists to the DB, so state carries across runs.
+    max_cycles = os.environ.get("WORKER_MAX_CYCLES")
+    w = Worker()
+    if max_cycles:
+        w._sleep = lambda s: None       # no waiting when we run a fixed count
+        w.run_forever(install_signals=False, max_cycles=int(max_cycles))
+    else:
+        w.run_forever()
 
 
 if __name__ == "__main__":

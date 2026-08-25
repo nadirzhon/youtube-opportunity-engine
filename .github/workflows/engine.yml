@@ -1,0 +1,68 @@
+name: engine-24-7
+
+# Free autonomous 24/7 operation on GitHub Actions (public repo = unlimited
+# minutes). Every 30 min it runs ONE worker cycle — discover channels, collect a
+# snapshot pass, analyze, learn — and carries the sqlite time-series across runs
+# via a rolling cache. No server, no cost.
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"     # every 30 minutes (GitHub may delay under load)
+  workflow_dispatch: {}         # allow manual "Run workflow"
+
+concurrency:
+  group: engine-cycle           # never overlap two cycles
+  cancel-in-progress: false
+
+jobs:
+  cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements-api.txt
+
+      # Rolling state: restore the most recent DB, save a fresh copy each run.
+      - name: Restore accumulated history
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: engine-db-${{ github.run_id }}
+          restore-keys: engine-db-
+
+      - name: Run one cycle
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          DATABASE_URL: sqlite:///data/yoe.db
+          WORKER_MAX_CYCLES: "1"
+          YOUTUBE_AUTO_DISCOVER: "true"
+          YOUTUBE_CATEGORIES: "28,27,26"      # tech/science, education, howto (higher RPM)
+          DISCOVERY_MAX_CHANNELS: "40"
+          WORKER_AUTO_BUILD: "false"
+          LOG_LEVEL: "INFO"
+        run: |
+          mkdir -p data
+          python -m yoe.worker
+
+      - name: Report state
+        if: always()
+        env:
+          DATABASE_URL: sqlite:///data/yoe.db
+        run: |
+          python - <<'PY'
+          from yoe import store
+          c = store.connect("sqlite:///data/yoe.db")
+          beat = store.get_state(c, "worker") or {}
+          print("cycles:", beat.get("cycles"), "| errors:", beat.get("errors"))
+          print("channels:", c.execute("SELECT COUNT(*) FROM channels").fetchone()[0],
+                "| videos:", c.execute("SELECT COUNT(*) FROM videos").fetchone()[0],
+                "| snapshots:", store.snapshot_count(c))
+          watch = store.get_state(c, "watch_channels") or []
+          print("watching:", len(watch), "channels")
+          PY
