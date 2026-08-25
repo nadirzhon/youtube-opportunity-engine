@@ -218,6 +218,50 @@ def feedback(topic: str, body: FeedbackBody) -> dict[str, Any]:
             "topic": topic, "performance": max(0.0, min(1.0, body.performance))}
 
 
+class ProfileBody(BaseModel):
+    id: str
+    name: str
+    niche_keywords: list[str] = []
+    category_ids: list[str] = []
+    region: str = "US"
+    min_rpm: float = 0.0
+    notes: str = ""
+
+
+@app.get("/profiles")
+def list_channel_profiles() -> dict[str, Any]:
+    from . import profiles
+    return {"profiles": [p.to_dict() for p in profiles.list_profiles(_db())]}
+
+
+@app.put("/profiles")
+def upsert_channel_profile(body: ProfileBody) -> dict[str, Any]:
+    from . import profiles
+    p = profiles.ChannelProfile(**body.model_dump())
+    profiles.save_profile(_db(), p)
+    return {"ok": True, "profile": p.to_dict()}
+
+
+@app.delete("/profiles/{profile_id}")
+def remove_channel_profile(profile_id: str) -> dict[str, Any]:
+    from . import profiles
+    profiles.delete_profile(_db(), profile_id)
+    return {"ok": True, "deleted": profile_id}
+
+
+@app.get("/profiles/{profile_id}/feed")
+def profile_feed(profile_id: str, limit: int = Query(10, ge=1, le=100)) -> dict[str, Any]:
+    """The tailored opportunity shortlist for one channel identity: matched to its
+    niche, RPM-floored, ranked by profit priority."""
+    from . import profiles
+    p = next((p for p in profiles.list_profiles(_db()) if p.id == profile_id), None)
+    if p is None:
+        raise HTTPException(404, f"no profile '{profile_id}'")
+    items = [o.to_dict() for o in _report().opportunities]
+    feed = profiles.feed_for(p, items)
+    return {"profile": p.to_dict(), "count": len(feed), "feed": feed[:limit]}
+
+
 @app.get("/backtest")
 def backtest(cutoff_hours: float = Query(24, ge=1),
              k: int = Query(3, ge=1, le=50)) -> dict[str, Any]:
